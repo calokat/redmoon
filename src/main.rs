@@ -7,24 +7,72 @@ use tokens::Token;
 use expr::Expr;
 use parser::Parser;
 
-fn lex_number(string: &str) -> (usize, Token) {
-    for (i, c) in String::from(string).chars().enumerate() {
-        if c.is_numeric() || c == '.' {
-             continue;
-        }
-        return (i - 1, Token::LiteralNumber(string[0..i].parse().expect("Above code should ensure a valid parse")));
-        };
-        return (string.len() - 1, Token::LiteralNumber(string[..].parse().expect("Above code should ensure a valid parse")));
+pub struct Lexer {
+    expr_str: String,
+    current: usize
+}
+
+impl<'a> Lexer {
+    pub fn new(s: String) -> Self {
+        return Self { expr_str: s, current: 0 };
     }
 
+    pub fn tokenize(&mut self) -> Vec<Token<'a>> {
+        let mut ret: Vec<Token<'a>> = vec![];
+        while self.current < self.expr_str.len() {
+            if let Some(c) = self.expr_str.chars().nth(self.current) {
+                if c.is_whitespace() {
+                    self.current += 1;
+                } else if c.is_numeric() {
+                    ret.push(self.lex_number());
+                } else if self.is_operator(c) {
+                    ret.push(self.lex_operator(c));
+                    self.current += 1;
+                } else if c == '(' {
+                    println!("Here it is again");
+                    ret.push(Token::LeftParens);
+                    self.current += 1;
+                } else if c == ')' {
+                    println!("Here it is");
+                    ret.push(Token::RightParens);
+                    self.current += 1;
+            }
+            }
+        }
+        return ret;
+    }
 
-fn is_operator(c: char) -> bool {
-    match c {
-        '+' => true,
-        '-' => true,
-        '/' => true,
-        '*' => true,
-        _ => false
+    fn lex_number(&mut self) -> Token<'a> {
+        let scan_start = self.current;
+        while self.current < self.expr_str.len() {
+            let c = self.expr_str.chars().nth(self.current).expect("lex_number(): Access should not be out of bounds");
+            if c.is_numeric() || c == '.' {
+                self.current += 1;
+                continue;
+            }
+            break;
+        };
+            return Token::LiteralNumber(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid parse"));
+    }
+
+    fn lex_operator(&self, c: char) -> Token<'a> {
+        match c {
+            '+' => Token::Plus,
+            '-' => Token::Minus,
+            '/' => Token::ForwardSlash,
+            '*' => Token::Star,
+            _ => panic!("Unknown symbol")
+        }
+    }
+
+    fn is_operator(&self, c: char) -> bool {
+        match c {
+            '+' => true,
+            '-' => true,
+            '/' => true,
+            '*' => true,
+            _ => false
+        }
     }
 }
 
@@ -146,40 +194,14 @@ fn main() {
     loop {
         println!("Enter an expression: ");
         let mut expr: String = String::new();
-        let mut tokens: Vec<Token> = vec![];
         match io::stdin().read_line(&mut expr) {
             Ok(_) => {
                 if expr.trim().to_lowercase() == "quit" {
                     break;
                 }
-                let mut it = 0;
-                loop {
-                    if let Some(c) = expr.chars().nth(it) {
-                        if c.is_whitespace() {
-                            // do nothing
-                        } else if c == '(' {
-                            tokens.push(Token::LeftParens);
-                        } else if c == ')' {
-                            tokens.push(Token::RightParens);
-                        } else if c.is_numeric() {
-                            let (advance, tkn) = lex_number(&expr[it..]);
-                            it += advance;
-                            tokens.push(tkn);
-                        } else if is_operator(c) {
-                            tokens.push(match c {
-                                    '+' => Token::Plus,
-                                    '-' => Token::Minus,
-                                    '/' => Token::ForwardSlash,
-                                    '*' => Token::Star,
-                                    _ => panic!("Unknown symbol")
-                                }
-                            );
-                        }
-                        it += 1;
-                    } else {
-                        break;
-                    }
-                }
+                
+                let mut lexer = Lexer::new(expr);
+                let tokens = lexer.tokenize();
                 let mut parser = Parser::new(tokens);
                 let root_res = parser.expression();
                 if let Ok(root) = root_res {
