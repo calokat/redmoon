@@ -23,7 +23,8 @@ enum Token<'a> {
 enum Expr<'a> {
     Binary(Box<Expr<'a>>, Token<'a>, Box<Expr<'a>>),
     Unary(Box<Expr<'a>>, Token<'a>),
-    Literal(Token<'a>)
+    Literal(Token<'a>),
+    Grouping(Box<Expr<'a>>),
 }
 
 
@@ -65,7 +66,6 @@ impl<'a> Parser<'a> {
             return Expr::Literal(self.previous_token());
         }
         if let Token::LiteralNumber(n) = self.current_token() {
-            println!("Number is {}", n);
             let res = self.current_token();
             self.advance();
             return Expr::Literal(res);
@@ -75,8 +75,7 @@ impl<'a> Parser<'a> {
             return Expr::Literal(res);
         } else if self.current_token() == Token::LeftParens {
             self.advance();
-            let expr = self.expression();
-            
+            let expr = Expr::Grouping(Box::new(self.expression()));
             if !self.check_token_type(Token::RightParens) {
                 panic!("Missing right parens");
             }
@@ -171,13 +170,11 @@ fn add_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
         if let Token::LiteralNumber(f2) = t2 {
             println!("{}", f1 + f2);
             return Token::LiteralNumber(f1 + f2);
-        } else if let Token::Plus = t2 {
-            panic!("Addition is not itself a number");
         } else {
-            panic!("Well now I'm stumped");
+            panic!("Addition only applies to numbers");
         }
     } else {
-        panic!("Addition only applies to numbers, what a moron!");
+        panic!("Addition only applies to numbers");
     }
 }
 
@@ -253,7 +250,7 @@ fn eval(expr: Expr) -> Token {
                 _ => panic!("Operator not supported yet")
             }
         },
-        Expr::Literal(t) => {println!("I know this is a literal"); return t;},
+        Expr::Literal(t) => {return t;},
         Expr::Unary(e, op) => {
             if op == Token::Minus {
                 if let Expr::Literal(t) = *e {
@@ -262,12 +259,22 @@ fn eval(expr: Expr) -> Token {
                     } else {
                         panic!("Unsupported negation");
                     }
+                } else if let Expr::Grouping(expr) = *e {
+                    let eval_res = eval(*expr);
+                    if let Token::LiteralNumber(i) = eval_res {
+                        return Token::LiteralNumber(-i);
+                    } else {
+                        panic!("Grouping token should return number literals");
+                    }
                 } else {
                     panic!("Cannot negate this");
                 }
             } else {
                 panic!("Unsupported unary operation");
             }
+        },
+        Expr::Grouping(e) => {
+            return eval(*e);
         }
     }
 }
@@ -290,7 +297,6 @@ fn main() {
                         } else if c == '(' {
                             tokens.push(Token::LeftParens);
                         } else if c == ')' {
-                            println!("Hello right parentheses");
                             tokens.push(Token::RightParens);
                         } else if c.is_numeric() {
                             let (advance, tkn) = lex_number(&expr[it..]);
@@ -313,7 +319,10 @@ fn main() {
                 }
                 let mut parser = Parser::new(tokens);
                 let root = parser.expression();
-                eval(root);
+                let result = eval(root);
+                if let Token::LiteralNumber(result) = result {
+                    println!("Final evaluated number: {}", result);
+                }
             },
             Err(_) => {
                 println!("Error while reading input");
