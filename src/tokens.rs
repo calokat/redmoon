@@ -1,6 +1,7 @@
 #[derive(PartialEq)]
 #[derive(Clone, Copy)]
 pub enum Token<'a> {
+    Assign,
     LiteralNumber(f32),
     LiteralString(&'a str),
     True,
@@ -12,6 +13,10 @@ pub enum Token<'a> {
     ForwardSlash,
     Equals,
     NotEquals,
+    LessThan,
+    GreaterThan,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
     Not,
     LeftParens,
     RightParens

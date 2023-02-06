@@ -84,8 +84,23 @@ impl<'a> Parser<'a> {
         return Ok(expr);
     }
 
-    pub fn equality(&mut self) -> Result<Expr<'a>, String> {
+    fn comparison(&mut self) -> Result<Expr<'a>, String> {
         let mut expr = self.term()?;
+        while self.check_token_type(Token::LessThan) ||
+            self.check_token_type(Token::LessThanOrEqual) ||
+            self.check_token_type(Token::Equals) ||
+            self.check_token_type(Token::GreaterThanOrEqual) ||
+            self.check_token_type(Token::GreaterThan) {
+                let operator = self.previous_token();
+                let right = self.term()?;
+                expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
+            }
+
+            return Ok(expr);
+        }
+
+    pub fn equality(&mut self) -> Result<Expr<'a>, String> {
+        let mut expr = self.comparison()?;
 
         while self.check_token_type(Token::Equals) ||
         self.check_token_type(Token::NotEquals) {
