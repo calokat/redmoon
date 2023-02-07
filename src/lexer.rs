@@ -1,12 +1,12 @@
 use crate::Token;
 
-pub struct Lexer {
-    expr_str: String,
+pub struct Lexer<'a> {
+    expr_str: &'a str,
     current: usize
 }
 
-impl<'a> Lexer {
-    pub fn new(s: String) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(s: &'a str) -> Self {
         return Self { expr_str: s, current: 0 };
     }
 

@@ -242,7 +242,7 @@ fn main() {
                     break;
                 }
                 
-                let mut lexer = Lexer::new(expr);
+                let mut lexer = Lexer::new(expr.as_str());
                 let tokens = lexer.tokenize();
                 let mut parser = Parser::new(tokens);
                 let root_res = parser.expression();
