@@ -2,6 +2,7 @@
 #[derive(Clone)]
 pub enum Token {
     Assign,
+    Comma,
     LiteralNumber(f32),
     LiteralString(String),
     True,

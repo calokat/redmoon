@@ -26,6 +26,9 @@ impl<'a> Lexer<'a> {
             } else if c == ')' {
                 ret.push(Token::RightParens);
                 self.advance();
+            } else if c == ',' {
+                ret.push(Token::Comma);
+                self.advance();
             }
         }
         return ret;
