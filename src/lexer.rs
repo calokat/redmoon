@@ -10,8 +10,8 @@ impl<'a> Lexer<'a> {
         return Self { expr_str: s, current: 0 };
     }
 
-    pub fn tokenize(&mut self) -> Vec<Token<'a>> {
-        let mut ret: Vec<Token<'a>> = vec![];
+    pub fn tokenize(&mut self) -> Vec<Token> {
+        let mut ret: Vec<Token> = vec![];
         while self.current < self.expr_str.len() {
             let c = self.current_char();
             if c.is_whitespace() {
@@ -31,7 +31,7 @@ impl<'a> Lexer<'a> {
         return ret;
     }
 
-    fn lex_number(&mut self) -> Token<'a> {
+    fn lex_number(&mut self) -> Token {
         let scan_start = self.current;
         while self.current < self.expr_str.len() {
             let c = self.current_char();
@@ -44,7 +44,7 @@ impl<'a> Lexer<'a> {
             return Token::LiteralNumber(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid parse"));
     }
 
-    fn lex_operator(&mut self, c: char) -> Token<'a> {
+    fn lex_operator(&mut self, c: char) -> Token {
          match c {
             '+' => {self.advance(); Token::Plus},
             '-' => {self.advance(); Token::Minus},

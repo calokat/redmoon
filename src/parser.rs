@@ -1,16 +1,16 @@
 use crate::{Token, Expr};
 
-pub struct Parser<'a> {
-    tokens: Vec<Token<'a>>,
+pub struct Parser {
+    tokens: Vec<Token>,
     current: usize,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token<'a>>) -> Self {
+impl Parser {
+    pub fn new(tokens: Vec<Token>) -> Self {
         return Self { tokens, current: 0 }
     }
 
-    pub fn primary(&mut self) -> Result<Expr<'a>, String> {
+    pub fn primary(&mut self) -> Result<Expr, String> {
         if self.check_token_type(Token::True) ||
         self.check_token_type(Token::False) ||
         self.check_token_type(Token::Nil) {
@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
         return Err("Unknown token".into());
     }
 
-    pub fn unary(&mut self) -> Result<Expr<'a>, String> {
+    pub fn unary(&mut self) -> Result<Expr, String> {
         if self.check_token_type(Token::Minus) {
             let operator = self.previous_token();
             if let Ok(right) = self.unary() {
@@ -51,7 +51,7 @@ impl<'a> Parser<'a> {
         return self.primary();
     }
 
-    pub fn factor(&mut self) -> Result<Expr<'a>, String> {
+    pub fn factor(&mut self) -> Result<Expr, String> {
         let unary = self.unary();
         if let Ok(mut expr) = unary {
             while self.check_token_type(Token::Star) ||
@@ -71,7 +71,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn term(&mut self) -> Result<Expr<'a>, String> {
+    pub fn term(&mut self) -> Result<Expr, String> {
         let mut expr = self.factor()?;
 
         while self.check_token_type(Token::Plus) ||
@@ -84,7 +84,7 @@ impl<'a> Parser<'a> {
         return Ok(expr);
     }
 
-    fn comparison(&mut self) -> Result<Expr<'a>, String> {
+    fn comparison(&mut self) -> Result<Expr, String> {
         let mut expr = self.term()?;
         while self.check_token_type(Token::LessThan) ||
             self.check_token_type(Token::LessThanOrEqual) ||
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
             return Ok(expr);
         }
 
-    pub fn equality(&mut self) -> Result<Expr<'a>, String> {
+    pub fn equality(&mut self) -> Result<Expr, String> {
         let mut expr = self.comparison()?;
 
         while self.check_token_type(Token::Equals) ||
@@ -112,23 +112,23 @@ impl<'a> Parser<'a> {
         return Ok(expr);
 }
 
-    pub fn expression(&mut self) -> Result<Expr<'a>, String> {
+    pub fn expression(&mut self) -> Result<Expr, String> {
         if self.tokens.len() > 0 {
             return self.equality();
         }
         return Err("No valid tokens".into());
     }
 
-    fn current_token(&self) -> Token<'a> {
-        return self.tokens[self.current];
+    fn current_token(&self) -> Token {
+        return self.tokens[self.current].clone();
     }
 
-    fn previous_token(&mut self) -> Token<'a> {
+    fn previous_token(&mut self) -> Token {
         if self.current == 0 {
             panic!("Went back before the beginning");
         }
 
-        return self.tokens[self.current - 1];
+        return self.tokens[self.current - 1].clone();
     }
 
     fn advance(&mut self) {

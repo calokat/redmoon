@@ -1,8 +1,9 @@
 use crate::Token;
 
-pub enum Expr<'a> {
-    Binary(Box<Expr<'a>>, Token<'a>, Box<Expr<'a>>),
-    Unary(Box<Expr<'a>>, Token<'a>),
-    Literal(Token<'a>),
-    Grouping(Box<Expr<'a>>),
+#[derive(Clone)]
+pub enum Expr {
+    Binary(Box<Expr>, Token, Box<Expr>),
+    Unary(Box<Expr>, Token),
+    Literal(Token),
+    Grouping(Box<Expr>),
 }

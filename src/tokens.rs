@@ -1,9 +1,9 @@
 #[derive(PartialEq)]
-#[derive(Clone, Copy)]
-pub enum Token<'a> {
+#[derive(Clone)]
+pub enum Token {
     Assign,
     LiteralNumber(f32),
-    LiteralString(&'a str),
+    LiteralString(String),
     True,
     False,
     Nil,

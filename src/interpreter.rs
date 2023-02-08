@@ -1,6 +1,6 @@
 use crate::{Token, Expr};
 
-fn add_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn add_exprs<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         if let Token::LiteralNumber(f2) = t2 {
             println!("{}", f1 + f2);
@@ -13,7 +13,7 @@ fn add_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn subtract_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn subtract_exprs<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -27,7 +27,7 @@ fn subtract_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn multiply_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn multiply_exprs<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -41,7 +41,7 @@ fn multiply_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn divide_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn divide_exprs<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -55,7 +55,7 @@ fn divide_exprs<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn less_than_or_equal<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn less_than_or_equal<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -72,7 +72,7 @@ fn less_than_or_equal<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn less_than<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn less_than<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -89,7 +89,7 @@ fn less_than<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn equals<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn equals<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -106,7 +106,7 @@ fn equals<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn greater_than_or_equal<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn greater_than_or_equal<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
@@ -123,7 +123,7 @@ fn greater_than_or_equal<'a>(t1: Token, t2: Token) -> Token<'a> {
     }
 }
 
-fn greater_than<'a>(t1: Token, t2: Token) -> Token<'a> {
+fn greater_than<'a>(t1: Token, t2: Token) -> Token {
     if let Token::LiteralNumber(f1) = t1 {
         match t2 {
             Token::LiteralNumber(f2) => {
