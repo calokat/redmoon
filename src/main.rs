@@ -3,12 +3,14 @@ mod expr;
 mod parser;
 mod lexer;
 mod interpreter;
+mod stmt;
 
 use std::io;
 use tokens::Token;
 use expr::Expr;
 use parser::Parser;
 use lexer::Lexer;
+use stmt::Stmt;
 
 fn main() {
     let mut interp = interpreter::Interpreter::new();
@@ -24,21 +26,16 @@ fn main() {
                 let mut lexer = Lexer::new(expr.as_str());
                 let tokens = lexer.tokenize();
                 let mut parser = Parser::new(tokens);
-                let root_res = parser.expression();
-                if let Ok(root) = root_res {
-                    let result = interp.eval(root);
-                    if let Token::LiteralNumber(result) = result {
-                        println!("Final evaluated number: {}", result);
-                    } else {
-                        match result {
-                            Token::False => println!("False"),
-                            Token::True => println!("True"),
-                            _ => println!("Token should not be a result of an expression")
+                let smt = parser.statement();
+                match smt {
+                    Ok(smt) => {
+                        if let Err(s) = interp.eval_stmt(smt) {
+                            println!("{}", s);
                         }
-                    }    
-                } else if let Err(msg) = root_res {
-                    println!("{}", msg);
-                    continue;
+                    },
+                    Err(s) => {
+                        println!("{}", s);
+                    }
                 }
             },
             Err(_) => {

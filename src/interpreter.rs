@@ -1,7 +1,7 @@
-use crate::{Token, Expr};
+use crate::{Token, Expr, Stmt};
 use std::collections::HashMap;
 pub struct Interpreter {
-    _G: HashMap<String, Expr>
+    _G: HashMap<String, Token>
 }
 
 impl Interpreter {
@@ -149,55 +149,133 @@ impl Interpreter {
         }
     }
     
-                                
+    pub fn eval_stmt(&mut self, s: Stmt) -> Result<(), String> {
+        match s {
+            Stmt::Empty => {
+                println!("AN EMPTY AND FUTILE GESTURE");
+                return Ok(());
+            },
+            Stmt::ExprStmt(e) => {
+                let t = self.eval_expr(e);
+                match t {
+                    Token::LiteralNumber(n) => {
+                        println!("{}", n);
+                        return Ok(());
+                    },
+                    Token::LiteralString(s) => {
+                        println!("{}", s);
+                        return Ok(());
+                    },
+                    Token::True => {
+                        println!("True");
+                        return Ok(());
+                    },
+                    Token::False => {
+                        println!("False");
+                        return Ok(());
+                    },
+                    Token::Nil => {
+                        println!("Expr Nil");
+                        return Ok(());
+                    },
+                    Token::Identifier(s) => {
+                        println!("Global Count: {}", self._G.len());
+                        if let Some(t) = self._G.get(&s) {
+                            match t {
+                                Token::LiteralNumber(n) => {
+                                    println!("{}", n);
+                                    return Ok(());
+                                },
+                                Token::LiteralString(s) => {
+                                    println!("{}", s);
+                                    return Ok(());
+                                },
+                                Token::True => {
+                                    println!("True");
+                                    return Ok(());
+                                },
+                                Token::False => {
+                                    println!("False");
+                                    return Ok(());
+                                },
+                                Token::Nil => {
+                                    println!("Identifier Nil");
+                                    return Ok(());
+                                },
+                                _ => {
+                                    return Err("Error retrieving variable".into());
+                                }
+                            }
+                        } else {
+                            println!("WTF Nil");
+                            return Ok(());
+                        }
+                    }
+                    _ => {
+                        return Err("Whoops unknown Token".into());
+                    }
+                }
+            },
+            Stmt::Assignment(var, val) => {
+                println!("Evaluating assignment");
+                if let Expr::Var(id) = var {
+                    let val = self.eval_expr(val);
+                    self._G.insert(id, val);
+                    return Ok(());
+                } else {
+                    return Err("Cannot assign".into());
+                }
+            }
+        }
+    }
     
-    pub fn eval(&mut self, expr: Expr) -> Token {
+    fn eval_expr(&mut self, expr: Expr) -> Token {
         match expr {
             Expr::Binary(o1, op, o2) => {
                 match op {
                     Token::Plus => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::add_exprs(t1, t2);
                     },
                     Token::Minus => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::subtract_exprs(t1, t2);
                     },
                     Token::Star => {
-                        let t1 = self.eval(*o1);
-                        let t3 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t3 = self.eval_expr(*o2);
                         return Self::multiply_exprs(t1, t3);
                     },
                     Token::ForwardSlash => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::divide_exprs(t1, t2);
                     },
                     Token::LessThanOrEqual => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::less_than_or_equal(t1, t2);
                     },
                     Token::LessThan => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::less_than(t1, t2);
                     },
                     Token::Equals => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::equals(t1, t2);
                     },
                     Token::GreaterThanOrEqual => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::greater_than_or_equal(t1, t2);
                     },
                     Token::GreaterThan => {
-                        let t1 = self.eval(*o1);
-                        let t2 = self.eval(*o2);
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
                         return Self::greater_than(t1, t2);
                     }
                     _ => panic!("Operator not supported yet")
@@ -213,7 +291,7 @@ impl Interpreter {
                             panic!("Unsupported negation");
                         }
                     } else if let Expr::Grouping(expr) = *e {
-                    let eval_res = self.eval(*expr);
+                    let eval_res = self.eval_expr(*expr);
                         if let Token::LiteralNumber(i) = eval_res {
                             return Token::LiteralNumber(-i);
                         } else {
@@ -227,10 +305,10 @@ impl Interpreter {
                 }
             },
             Expr::Grouping(e) => {
-                return self.eval(*e);
+                return self.eval_expr(*e);
             },
             Expr::Var(s) => {
-                return Token::Nil;
+                return Token::Identifier(s);
             }
         }
     }

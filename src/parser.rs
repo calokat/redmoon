@@ -1,4 +1,4 @@
-use crate::{Token, Expr};
+use crate::{Token, Expr, stmt::Stmt};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -16,9 +16,10 @@ impl Parser {
         self.check_token_type(Token::Nil) {
             return Ok(Expr::Literal(self.previous_token()));
         }
-        if let Token::LiteralNumber(_) = self.current_token() {
+        if let Token::LiteralNumber(n) = self.current_token() {
             let res = self.current_token();
             self.advance();
+            println!("{}", n);
             return Ok(Expr::Literal(res));
         } else if let Token::LiteralString(_) = self.current_token() {
             let res = self.current_token();
@@ -114,11 +115,29 @@ impl Parser {
         return Ok(expr);
 }
 
-    pub fn expression(&mut self) -> Result<Expr, String> {
+    fn expression(&mut self) -> Result<Expr, String> {
         if self.tokens.len() > 0 {
             return self.equality();
         }
         return Err("No valid tokens".into());
+    }
+
+    pub fn statement(&mut self) -> Result<Stmt, String> {
+        if self.tokens.len() == 0 {
+            return Err("No valid tokens".into());
+        }
+        if self.check_token_type(Token::Semicolon) {
+            return Ok(Stmt::Empty);
+        }
+        if let Token::Identifier(s) = self.current_token() {
+            self.advance();
+            if self.check_token_type(Token::Assign) {
+                println!("Detected assign");
+                self.advance();
+                return Ok(Stmt::Assignment(Expr::Var(s), self.expression()?));
+            }
+        }
+        return Ok(Stmt::ExprStmt(self.expression()?));
     }
 
     fn current_token(&self) -> Token {
