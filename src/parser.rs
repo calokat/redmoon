@@ -143,7 +143,6 @@ impl Parser {
             self.advance();
             if self.check_token_type(Token::Assign) {
                 println!("Detected assign");
-                self.advance();
                 return Ok(Stmt::Assignment(Expr::Var(s), self.expression()?));
             }
         }
