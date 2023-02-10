@@ -20,5 +20,6 @@ pub enum Token {
     GreaterThanOrEqual,
     Not,
     LeftParens,
-    RightParens
+    RightParens,
+    Identifier(String),
 }
