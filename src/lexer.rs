@@ -33,6 +33,9 @@ impl<'a> Lexer<'a> {
             c == '_' {
                 ret.push(self.lex_identifier());
                 self.advance();
+            } else if c == ';' {
+                ret.push(Token::Semicolon);
+                self.advance();
             }
         }
         return ret;
