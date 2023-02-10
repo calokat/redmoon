@@ -9,6 +9,14 @@ impl Interpreter {
         Self { _G: HashMap::new() }
     }
 
+    fn stringify(&self, t: Token) -> Result<Token, String> {
+        match t {
+            Token::LiteralString(s) => return Ok(Token::LiteralString(s)),
+            Token::LiteralNumber(n) => return Ok(Token::LiteralString(format!("{}", n))),
+            _ => return Err("Cannot stringify value".into())
+        }
+    }
+
     fn add_exprs(t1: Token, t2: Token) -> Token {
         if let Token::LiteralNumber(f1) = t1 {
             if let Token::LiteralNumber(f2) = t2 {
@@ -281,8 +289,10 @@ impl Interpreter {
                     Token::Concatenation => {
                         let t1 = self.eval_expr(*o1);
                         let t2 = self.eval_expr(*o2);
-                        if let Token::LiteralString(s1) = t1 {
-                            if let Token::LiteralString(s2) = t2 {
+                        let s1 = self.stringify(t1);
+                        let s2 = self.stringify(t2);
+                        if let Ok(Token::LiteralString(s1)) = s1 {
+                            if let Ok(Token::LiteralString(s2)) = s2 {
                                 return Token::LiteralString(s1 + &s2);
                             }
                         }
