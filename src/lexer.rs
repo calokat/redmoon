@@ -36,8 +36,24 @@ impl<'a> Lexer<'a> {
             } else if c == ';' {
                 ret.push(Token::Semicolon);
                 self.advance();
+            } else if c == '"' {
+                self.advance();
+                ret.push(self.lex_string());
+            } else {
+                panic!("Cannot lex current sequence");
             }
         }
+        return ret;
+    }
+
+    fn lex_string(&mut self) -> Token {
+        let scan_start = self.current;
+        while self.current_char() != '"' && self.current < self.expr_str.len() {
+            self.advance();
+        }
+        assert!(self.current_char() == '"', "Missing closing '\"'");
+        let ret = Token::LiteralString(self.expr_str[scan_start..self.current].into());
+        self.advance();
         return ret;
     }
 

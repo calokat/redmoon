@@ -207,7 +207,7 @@ impl Interpreter {
                                 }
                             }
                         } else {
-                            println!("WTF Nil");
+                            println!("Nil");
                             return Ok(());
                         }
                     }
