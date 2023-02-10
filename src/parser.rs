@@ -87,20 +87,30 @@ impl Parser {
         return Ok(expr);
     }
 
-    fn comparison(&mut self) -> Result<Expr, String> {
+    fn concat(&mut self) -> Result<Expr, String> {
         let mut expr = self.term()?;
+        while self.check_token_type(Token::Concatenation) {
+            println!("Concat checking");
+            expr = Expr::Binary(Box::new(expr), Token::Concatenation, Box::new(self.term()?));
+        }
+        println!("Concat checking done");
+        return Ok(expr);
+    }
+
+    fn comparison(&mut self) -> Result<Expr, String> {
+        let mut expr = self.concat()?;
         while self.check_token_type(Token::LessThan) ||
             self.check_token_type(Token::LessThanOrEqual) ||
             self.check_token_type(Token::Equals) ||
             self.check_token_type(Token::GreaterThanOrEqual) ||
             self.check_token_type(Token::GreaterThan) {
                 let operator = self.previous_token();
-                let right = self.term()?;
+                let right = self.concat()?;
                 expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
-            }
+        }
 
             return Ok(expr);
-        }
+    }
 
     fn equality(&mut self) -> Result<Expr, String> {
         let mut expr = self.comparison()?;
@@ -113,7 +123,7 @@ impl Parser {
         }
 
         return Ok(expr);
-}
+    }
 
     fn expression(&mut self) -> Result<Expr, String> {
         if self.tokens.len() > 0 {

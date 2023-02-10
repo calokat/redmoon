@@ -23,4 +23,5 @@ pub enum Token {
     RightParens,
     Identifier(String),
     Semicolon,
+    Concatenation,
 }

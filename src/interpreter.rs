@@ -277,6 +277,16 @@ impl Interpreter {
                         let t1 = self.eval_expr(*o1);
                         let t2 = self.eval_expr(*o2);
                         return Self::greater_than(t1, t2);
+                    },
+                    Token::Concatenation => {
+                        let t1 = self.eval_expr(*o1);
+                        let t2 = self.eval_expr(*o2);
+                        if let Token::LiteralString(s1) = t1 {
+                            if let Token::LiteralString(s2) = t2 {
+                                return Token::LiteralString(s1 + &s2);
+                            }
+                        }
+                        panic!("Cannot concatenate");
                     }
                     _ => panic!("Operator not supported yet")
                 }

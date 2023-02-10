@@ -39,6 +39,21 @@ impl<'a> Lexer<'a> {
             } else if c == '"' {
                 self.advance();
                 ret.push(self.lex_string());
+            } else if c == '.' {
+                if let Some(nc) = self.peek_next_char() {
+                    if nc.is_numeric() {
+                        ret.push(self.lex_number());
+                    } else if nc == '.' {
+                        self.advance();
+                        self.advance();
+                        if self.current_char() == '.' {
+                            panic!("Varargs are coming soon!");
+                        } else {
+                            println!("adding concat token");
+                            ret.push(Token::Concatenation);
+                        }
+                    }
+                }
             } else {
                 panic!("Cannot lex current sequence");
             }
@@ -141,5 +156,16 @@ impl<'a> Lexer<'a> {
 
     fn current_char(&self) -> char {
         return self.expr_str.chars().nth(self.current).expect("Lexer should not be out of bounds");
+    }
+
+    fn at_eof(&self) -> bool {
+        return self.current == (self.expr_str.len() - 1);
+    }
+
+    fn peek_next_char(&self) -> Option<char> {
+        if self.at_eof() {
+            return None;
+        }
+        return self.expr_str.chars().nth(self.current + 1);
     }
 }
