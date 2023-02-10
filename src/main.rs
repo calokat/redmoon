@@ -11,6 +11,7 @@ use parser::Parser;
 use lexer::Lexer;
 
 fn main() {
+    let mut interp = interpreter::Interpreter::new();
     loop {
         println!("Enter an expression: ");
         let mut expr: String = String::new();
@@ -25,7 +26,7 @@ fn main() {
                 let mut parser = Parser::new(tokens);
                 let root_res = parser.expression();
                 if let Ok(root) = root_res {
-                    let result = interpreter::eval(root);
+                    let result = interp.eval(root);
                     if let Token::LiteralNumber(result) = result {
                         println!("Final evaluated number: {}", result);
                     } else {
