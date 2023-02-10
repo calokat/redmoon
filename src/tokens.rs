@@ -22,4 +22,5 @@ pub enum Token {
     LeftParens,
     RightParens,
     Identifier(String),
+    Semicolon,
 }
