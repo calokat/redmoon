@@ -6,4 +6,5 @@ pub enum Expr {
     Unary(Box<Expr>, Token),
     Literal(Token),
     Grouping(Box<Expr>),
+    Var(String)
 }
