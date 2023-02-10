@@ -10,7 +10,7 @@ impl Parser {
         return Self { tokens, current: 0 }
     }
 
-    pub fn primary(&mut self) -> Result<Expr, String> {
+    fn primary(&mut self) -> Result<Expr, String> {
         if self.check_token_type(Token::True) ||
         self.check_token_type(Token::False) ||
         self.check_token_type(Token::Nil) {
@@ -35,11 +35,13 @@ impl Parser {
                 return Ok(expr);    
             }
             return expr_res;
-        }
+        } else if let Token::Identifier(s) = self.current_token() {
+            return Ok(Expr::Var(s));
+        } 
         return Err("Unknown token".into());
     }
 
-    pub fn unary(&mut self) -> Result<Expr, String> {
+    fn unary(&mut self) -> Result<Expr, String> {
         if self.check_token_type(Token::Minus) {
             let operator = self.previous_token();
             if let Ok(right) = self.unary() {
@@ -51,7 +53,7 @@ impl Parser {
         return self.primary();
     }
 
-    pub fn factor(&mut self) -> Result<Expr, String> {
+    fn factor(&mut self) -> Result<Expr, String> {
         let unary = self.unary();
         if let Ok(mut expr) = unary {
             while self.check_token_type(Token::Star) ||
@@ -71,7 +73,7 @@ impl Parser {
         }
     }
 
-    pub fn term(&mut self) -> Result<Expr, String> {
+    fn term(&mut self) -> Result<Expr, String> {
         let mut expr = self.factor()?;
 
         while self.check_token_type(Token::Plus) ||
@@ -99,7 +101,7 @@ impl Parser {
             return Ok(expr);
         }
 
-    pub fn equality(&mut self) -> Result<Expr, String> {
+    fn equality(&mut self) -> Result<Expr, String> {
         let mut expr = self.comparison()?;
 
         while self.check_token_type(Token::Equals) ||
