@@ -29,6 +29,10 @@ impl<'a> Lexer<'a> {
             } else if c == ',' {
                 ret.push(Token::Comma);
                 self.advance();
+            } else if c.is_alphabetic() ||
+            c == '_' {
+                ret.push(self.lex_identifier());
+                self.advance();
             }
         }
         return ret;
@@ -45,6 +49,20 @@ impl<'a> Lexer<'a> {
             break;
         };
             return Token::LiteralNumber(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid parse"));
+    }
+
+    fn lex_identifier(&mut self) -> Token {
+        let scan_start = self.current;
+        while self.current < self.expr_str.len() {
+            let c = self.current_char();
+            if c.is_alphabetic() ||
+             c == '_' {
+                self.advance();
+                continue;
+            }
+            break;
+        };
+            return Token::Identifier(self.expr_str[scan_start..self.current].into());
     }
 
     fn lex_operator(&mut self, c: char) -> Token {
