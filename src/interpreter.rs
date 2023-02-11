@@ -1,5 +1,5 @@
 use crate::{Token, Expr, Stmt, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 type Table = HashMap<Value, Value>;
 
@@ -7,7 +7,7 @@ pub struct Interpreter {
     _G: Table
 }
 
-impl<'a> Interpreter {
+impl Interpreter {
     pub fn new() -> Self {
         Self { _G: Table::new() }
     }
@@ -174,15 +174,27 @@ impl<'a> Interpreter {
             },
             Stmt::Assignment(var, val) => {
                 println!("Evaluating assignment");
-                if let Expr::Var(id) = var {
-                    let val = self.eval_expr(val);
-                    // self._G.insert(id, val);
-                    self._G.insert(Value::String(id), val);
-                    return Ok(());
-                } else {
-                    return Err("Cannot assign".into());
+                let mut val_vec = vec![];
+                if let Expr::Exprlist(el) = val {
+                    for e in el.into_iter() {
+                        val_vec.push(self.eval_expr(e));
+                    }
                 }
-            }    
+                if let Expr::Varlist(var_list) = var {
+                    let mut var_dq = VecDeque::from(var_list);
+                    let mut val_dq = VecDeque::from(val_vec);
+                    while let Some(Expr::Var(var)) = var_dq.pop_front() {
+                        if let Some(value) = val_dq.pop_front() {
+                            self._G.insert(Value::String(var), value);
+                        } else {
+                            self._G.insert(Value::String(var), Value::Nil);
+                        }
+                    }
+                } else {
+                    return Err("Cannot assign to this".into());
+                }
+                return Ok(());
+            }
         }
     }
     
@@ -284,6 +296,12 @@ impl<'a> Interpreter {
                     return v.clone();
                 }
                 Value::Nil
+            },
+            Expr::Exprlist(_) => {
+                panic!("How did Exprlist this get here?");
+            },
+            Expr::Varlist(_) => {
+                panic!("How did this Varlist get here?");
             }
         }
     }

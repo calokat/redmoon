@@ -32,7 +32,6 @@ impl<'a> Lexer<'a> {
             } else if c.is_alphabetic() ||
             c == '_' {
                 ret.push(self.lex_identifier());
-                self.advance();
             } else if c == ';' {
                 ret.push(Token::Semicolon);
                 self.advance();
@@ -153,7 +152,7 @@ impl<'a> Lexer<'a> {
         } else {
             println!("Lexer internal error: reading past end of buffer");
         }
-    }
+    } 
 
     fn current_char(&self) -> char {
         return self.expr_str.chars().nth(self.current).expect("Lexer should not be out of bounds");

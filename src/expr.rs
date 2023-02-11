@@ -5,5 +5,7 @@ pub enum Expr {
     Unary(Box<Expr>, Token),
     Literal(Value),
     Grouping(Box<Expr>),
-    Var(String)
+    Var(String),
+    Varlist(Vec<Expr>),
+    Exprlist(Vec<Expr>),
 }

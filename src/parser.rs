@@ -123,6 +123,26 @@ impl Parser {
         return Err("No valid tokens".into());
     }
 
+    fn expr_list(&mut self) -> Result<Expr, String> {
+        let mut expr_vec = vec![self.expression()?];
+        while self.check_token_type(Token::Comma) {
+            expr_vec.push(self.expression()?);
+        }
+        return Ok(Expr::Exprlist(expr_vec));
+    }
+
+    fn var_list(&mut self, first_var_name: String) -> Result<Expr, String> {
+        let mut var_vec = vec![Expr::Var(first_var_name)];
+        self.advance();
+        while self.check_token_type(Token::Comma) {
+            if let Token::Identifier(s) = self.current_token() {
+                var_vec.push(Expr::Var(s));
+                self.advance();
+            }
+        }
+        return Ok(Expr::Varlist(var_vec));
+    }
+
     pub fn statement(&mut self) -> Result<Stmt, String> {
         if self.tokens.len() == 0 {
             return Err("No valid tokens".into());
@@ -131,13 +151,10 @@ impl Parser {
             return Ok(Stmt::Empty);
         }
         if let Token::Identifier(s) = self.current_token() {
-            let s = s.clone();
-            let peek = self.peek_next_token();
-            if let Some(pt) = peek {
-                if pt == Token::Assign {
-                    self.advance(); self.advance();
-                    return Ok(Stmt::Assignment(Expr::Var(s), self.expression()?));
-                }
+            let var_list = self.var_list(s)?;
+            if self.check_token_type(Token::Assign) {
+                let expr_list = self.expr_list()?;
+                return Ok(Stmt::Assignment(var_list, expr_list));
             }
         }
         return Ok(Stmt::ExprStmt(self.expression()?));
@@ -145,13 +162,6 @@ impl Parser {
 
     fn current_token(&self) -> Token {
         return self.tokens[self.current].clone();
-    }
-
-    fn peek_next_token(&self) -> Option<Token> {
-        if self.current < self.tokens.len() - 1 {
-            return Some(self.tokens[self.current + 1].clone());
-        }
-        None
     }
 
     fn previous_token(&self) -> Token {
