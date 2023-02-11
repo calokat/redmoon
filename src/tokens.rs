@@ -1,13 +1,9 @@
-#[derive(PartialEq)]
-#[derive(Clone)]
+use crate::Value;
+#[derive(PartialEq, Clone)]
 pub enum Token {
     Assign,
     Comma,
-    LiteralNumber(f32),
-    LiteralString(String),
-    True,
-    False,
-    Nil,
+    Literal(Value),
     Plus,
     Minus,
     Star,

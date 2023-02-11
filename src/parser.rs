@@ -1,4 +1,4 @@
-use crate::{Token, Expr, stmt::Stmt};
+use crate::{Token, Expr, Stmt};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -11,20 +11,9 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr, String> {
-        if self.check_token_type(Token::True) ||
-        self.check_token_type(Token::False) ||
-        self.check_token_type(Token::Nil) {
-            return Ok(Expr::Literal(self.previous_token()));
-        }
-        if let Token::LiteralNumber(n) = self.current_token() {
-            let res = self.current_token();
+        if let Token::Literal(v) = self.current_token() {
             self.advance();
-            println!("{}", n);
-            return Ok(Expr::Literal(res));
-        } else if let Token::LiteralString(_) = self.current_token() {
-            let res = self.current_token();
-            self.advance();
-            return Ok(Expr::Literal(res));
+            return Ok(Expr::Literal(v.clone()));
         } else if self.current_token() == Token::LeftParens {
             self.advance();
             let expr_res = self.expression();
@@ -37,8 +26,11 @@ impl Parser {
             }
             return expr_res;
         } else if let Token::Identifier(s) = self.current_token() {
-            return Ok(Expr::Var(s));
-        } 
+            self.advance();
+            return Ok(Expr::Var(s.clone()));
+        } else if Token::Equals == self.current_token() {
+            println!("Aha advance strikes again");
+        }
         return Err("Unknown token".into());
     }
 
@@ -93,7 +85,6 @@ impl Parser {
             println!("Concat checking");
             expr = Expr::Binary(Box::new(expr), Token::Concatenation, Box::new(self.term()?));
         }
-        println!("Concat checking done");
         return Ok(expr);
     }
 
@@ -140,10 +131,13 @@ impl Parser {
             return Ok(Stmt::Empty);
         }
         if let Token::Identifier(s) = self.current_token() {
-            self.advance();
-            if self.check_token_type(Token::Assign) {
-                println!("Detected assign");
-                return Ok(Stmt::Assignment(Expr::Var(s), self.expression()?));
+            let s = s.clone();
+            let peek = self.peek_next_token();
+            if let Some(pt) = peek {
+                if pt == Token::Assign {
+                    self.advance(); self.advance();
+                    return Ok(Stmt::Assignment(Expr::Var(s), self.expression()?));
+                }
             }
         }
         return Ok(Stmt::ExprStmt(self.expression()?));
@@ -153,7 +147,14 @@ impl Parser {
         return self.tokens[self.current].clone();
     }
 
-    fn previous_token(&mut self) -> Token {
+    fn peek_next_token(&self) -> Option<Token> {
+        if self.current < self.tokens.len() - 1 {
+            return Some(self.tokens[self.current + 1].clone());
+        }
+        None
+    }
+
+    fn previous_token(&self) -> Token {
         if self.current == 0 {
             panic!("Went back before the beginning");
         }

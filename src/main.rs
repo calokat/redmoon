@@ -4,6 +4,7 @@ mod parser;
 mod lexer;
 mod interpreter;
 mod stmt;
+mod values;
 
 use std::io;
 use tokens::Token;
@@ -11,6 +12,7 @@ use expr::Expr;
 use parser::Parser;
 use lexer::Lexer;
 use stmt::Stmt;
+use values::Value;
 
 fn main() {
     let mut interp = interpreter::Interpreter::new();

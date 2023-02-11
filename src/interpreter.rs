@@ -1,27 +1,30 @@
-use crate::{Token, Expr, Stmt};
+use crate::{Token, Expr, Stmt, Value};
 use std::collections::HashMap;
+
+type Table = HashMap<Value, Value>;
+
 pub struct Interpreter {
-    _G: HashMap<String, Token>
+    _G: Table
 }
 
-impl Interpreter {
+impl<'a> Interpreter {
     pub fn new() -> Self {
-        Self { _G: HashMap::new() }
+        Self { _G: Table::new() }
     }
 
-    fn stringify(&self, t: Token) -> Result<Token, String> {
-        match t {
-            Token::LiteralString(s) => return Ok(Token::LiteralString(s)),
-            Token::LiteralNumber(n) => return Ok(Token::LiteralString(format!("{}", n))),
+    fn stringify(&self, v: Value) -> Result<Value, String> {
+        match v {
+            Value::String(s) => return Ok(Value::String(s)),
+            Value::Number(n) => return Ok(Value::String(format!("{}", n))),
             _ => return Err("Cannot stringify value".into())
         }
     }
 
-    fn add_exprs(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
-            if let Token::LiteralNumber(f2) = t2 {
+    fn add_vals(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
+            if let Value::Number(f2) = t2 {
                 println!("{}", f1 + f2);
-                return Token::LiteralNumber(f1 + f2);
+                return Value::Number(f1 + f2);
             } else {
                 panic!("Addition only applies to numbers");
             }
@@ -30,12 +33,12 @@ impl Interpreter {
         }
     }
     
-    fn subtract_exprs(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn subtract_vals(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 - f2);
-                    return Token::LiteralNumber(f1 - f2);
+                    return Value::Number(f1 - f2);
                 },
                 _ => panic!("Subtraction only applies to numbers")
             }
@@ -44,12 +47,12 @@ impl Interpreter {
         }
     }
     
-    fn multiply_exprs(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn multiply_vals(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 * f2);
-                    return Token::LiteralNumber(f1 * f2);
+                    return Value::Number(f1 * f2);
                 },
                 _ => panic!("Multiplication only applies to numbers")
             }
@@ -58,12 +61,12 @@ impl Interpreter {
         }
     }
     
-    fn divide_exprs(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn divide_vals(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 / f2);
-                    return Token::LiteralNumber(f1 / f2);
+                    return Value::Number(f1 / f2);
                 },
                 _ => panic!("Division only applies to numbers")
             }
@@ -72,15 +75,12 @@ impl Interpreter {
         }
     }
     
-    fn less_than_or_equal(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn less_than_or_equal(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 <= f2);
-                    if f1 <= f2 {
-                        return Token::True;
-                    }
-                    return Token::False;
+                    Value::Boolean(f1 <= f2)
                 },
                 _ => panic!("Comparison only applies to numbers")
             }
@@ -89,15 +89,12 @@ impl Interpreter {
         }
     }
     
-    fn less_than(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn less_than(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 < f2);
-                    if f1 < f2 {
-                        return Token::True;
-                    }
-                    return Token::False;
+                    return Value::Boolean(f1 < f2);
                 },
                 _ => panic!("Comparison only applies to numbers")
             }
@@ -106,15 +103,12 @@ impl Interpreter {
         }
     }
     
-    fn equals(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn equals(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 == f2);
-                    if f1 == f2 {
-                        return Token::True;
-                    }
-                    return Token::False;
+                    Value::Boolean(f1 == f2)
                 },
                 _ => panic!("Comparison only applies to numbers")
             }
@@ -123,15 +117,12 @@ impl Interpreter {
         }
     }
     
-    fn greater_than_or_equal<'a>(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn greater_than_or_equal(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 >= f2);
-                    if f1 >= f2 {
-                        return Token::True;
-                    }
-                    return Token::False;
+                    Value::Boolean(f1 >= f2)
                 },
                 _ => panic!("Comparison only applies to numbers")
             }
@@ -140,15 +131,12 @@ impl Interpreter {
         }
     }
     
-    fn greater_than<'a>(t1: Token, t2: Token) -> Token {
-        if let Token::LiteralNumber(f1) = t1 {
+    fn greater_than(t1: Value, t2: Value) -> Value {
+        if let Value::Number(f1) = t1 {
             match t2 {
-                Token::LiteralNumber(f2) => {
+                Value::Number(f2) => {
                     println!("{}", f1 > f2);
-                    if f1 > f2 {
-                        return Token::True;
-                    }
-                    return Token::False;
+                    Value::Boolean(f1 > f2)
                 },
                 _ => panic!("Comparison only applies to numbers")
             }
@@ -164,102 +152,64 @@ impl Interpreter {
                 return Ok(());
             },
             Stmt::ExprStmt(e) => {
-                let t = self.eval_expr(e);
-                match t {
-                    Token::LiteralNumber(n) => {
+                let v = self.eval_expr(e);
+                match v {
+                    Value::Boolean(b) => {
+                        println!("{}", b);
+                        return Ok(());
+                    },
+                    Value::Nil => {
+                        println!("Nil");
+                        return Ok(());
+                    },
+                    Value::Number(n) => {
                         println!("{}", n);
                         return Ok(());
                     },
-                    Token::LiteralString(s) => {
+                    Value::String(s) => {
                         println!("{}", s);
                         return Ok(());
                     },
-                    Token::True => {
-                        println!("True");
-                        return Ok(());
-                    },
-                    Token::False => {
-                        println!("False");
-                        return Ok(());
-                    },
-                    Token::Nil => {
-                        println!("Expr Nil");
-                        return Ok(());
-                    },
-                    Token::Identifier(s) => {
-                        println!("Global Count: {}", self._G.len());
-                        if let Some(t) = self._G.get(&s) {
-                            match t {
-                                Token::LiteralNumber(n) => {
-                                    println!("{}", n);
-                                    return Ok(());
-                                },
-                                Token::LiteralString(s) => {
-                                    println!("{}", s);
-                                    return Ok(());
-                                },
-                                Token::True => {
-                                    println!("True");
-                                    return Ok(());
-                                },
-                                Token::False => {
-                                    println!("False");
-                                    return Ok(());
-                                },
-                                Token::Nil => {
-                                    println!("Identifier Nil");
-                                    return Ok(());
-                                },
-                                _ => {
-                                    return Err("Error retrieving variable".into());
-                                }
-                            }
-                        } else {
-                            println!("Nil");
-                            return Ok(());
-                        }
-                    }
-                    _ => {
-                        return Err("Whoops unknown Token".into());
-                    }
                 }
             },
             Stmt::Assignment(var, val) => {
                 println!("Evaluating assignment");
                 if let Expr::Var(id) = var {
                     let val = self.eval_expr(val);
-                    self._G.insert(id, val);
+                    // self._G.insert(id, val);
+                    self._G.insert(Value::String(id), val);
                     return Ok(());
                 } else {
                     return Err("Cannot assign".into());
                 }
-            }
+            }    
         }
     }
     
-    fn eval_expr(&mut self, expr: Expr) -> Token {
+    
+    fn eval_expr(&mut self, expr: Expr) -> Value {
         match expr {
             Expr::Binary(o1, op, o2) => {
                 match op {
                     Token::Plus => {
                         let t1 = self.eval_expr(*o1);
                         let t2 = self.eval_expr(*o2);
-                        return Self::add_exprs(t1, t2);
+                        return Self::add_vals(t1, t2);
                     },
                     Token::Minus => {
                         let t1 = self.eval_expr(*o1);
                         let t2 = self.eval_expr(*o2);
-                        return Self::subtract_exprs(t1, t2);
+                        return Self::subtract_vals(t1, t2);
                     },
                     Token::Star => {
                         let t1 = self.eval_expr(*o1);
                         let t3 = self.eval_expr(*o2);
-                        return Self::multiply_exprs(t1, t3);
+                        return Self::multiply_vals(t1, t3);
                     },
                     Token::ForwardSlash => {
                         let t1 = self.eval_expr(*o1);
                         let t2 = self.eval_expr(*o2);
-                        return Self::divide_exprs(t1, t2);
+                        return Self::divide_vals(t1, t2);
                     },
                     Token::LessThanOrEqual => {
                         let t1 = self.eval_expr(*o1);
@@ -291,9 +241,9 @@ impl Interpreter {
                         let t2 = self.eval_expr(*o2);
                         let s1 = self.stringify(t1);
                         let s2 = self.stringify(t2);
-                        if let Ok(Token::LiteralString(s1)) = s1 {
-                            if let Ok(Token::LiteralString(s2)) = s2 {
-                                return Token::LiteralString(s1 + &s2);
+                        if let Ok(Value::String(s1)) = s1 {
+                            if let Ok(Value::String(s2)) = s2 {
+                                return Value::String(s1 + &s2);
                             }
                         }
                         panic!("Cannot concatenate");
@@ -301,19 +251,21 @@ impl Interpreter {
                     _ => panic!("Operator not supported yet")
                 }
             },
-            Expr::Literal(t) => {return t;},
+            Expr::Literal(t) => {
+                t
+            },
             Expr::Unary(e, op) => {
                 if op == Token::Minus {
                     if let Expr::Literal(t) = *e {
-                        if let Token::LiteralNumber(n) = t {
-                            return Token::LiteralNumber(-n);
+                        if let Value::Number(n) = t {
+                            return Value::Number(-n);
                         } else {
                             panic!("Unsupported negation");
                         }
                     } else if let Expr::Grouping(expr) = *e {
                     let eval_res = self.eval_expr(*expr);
-                        if let Token::LiteralNumber(i) = eval_res {
-                            return Token::LiteralNumber(-i);
+                        if let Value::Number(i) = eval_res {
+                            return Value::Number(-i);
                         } else {
                             panic!("Grouping token should return number literals");
                         }
@@ -328,7 +280,10 @@ impl Interpreter {
                 return self.eval_expr(*e);
             },
             Expr::Var(s) => {
-                return Token::Identifier(s);
+                if let Some(v) = self._G.get(&Value::String(s)) {
+                    return v.clone();
+                }
+                Value::Nil
             }
         }
     }

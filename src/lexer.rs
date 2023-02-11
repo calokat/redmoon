@@ -1,5 +1,5 @@
 use crate::Token;
-
+use crate::Value;
 pub struct Lexer<'a> {
     expr_str: &'a str,
     current: usize
@@ -67,7 +67,7 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
         assert!(self.current_char() == '"', "Missing closing '\"'");
-        let ret = Token::LiteralString(self.expr_str[scan_start..self.current].into());
+        let ret = Token::Literal(Value::String(self.expr_str[scan_start..self.current].into()));
         self.advance();
         return ret;
     }
@@ -82,7 +82,7 @@ impl<'a> Lexer<'a> {
             }
             break;
         };
-            return Token::LiteralNumber(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid parse"));
+            return Token::Literal(Value::Number(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid parse")));
     }
 
     fn lex_identifier(&mut self) -> Token {
@@ -96,6 +96,7 @@ impl<'a> Lexer<'a> {
             }
             break;
         };
+            println!("{}", &self.expr_str[scan_start..self.current]);
             return Token::Identifier(self.expr_str[scan_start..self.current].into());
     }
 
