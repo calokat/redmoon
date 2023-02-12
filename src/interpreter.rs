@@ -4,12 +4,23 @@ use std::collections::{HashMap, VecDeque};
 type Table = HashMap<Value, Value>;
 
 pub struct Interpreter {
-    _G: Table
+    _G: Table,
+    stack: VecDeque<Table>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self { _G: Table::new() }
+        Self { _G: Table::new(), stack: VecDeque::new() }
+    }
+
+    fn find_var(&self, name: String) -> Option<&Value> {
+        let val_key = Value::String(name);
+        for t in self.stack.iter() {
+            if let Some(ret) = t.get(&val_key) {
+                return Some(ret);
+            }
+        }
+        return self._G.get(&val_key);
     }
 
     fn stringify(&self, v: Value) -> Result<Value, String> {
@@ -148,7 +159,6 @@ impl Interpreter {
     pub fn eval_stmt(&mut self, s: Stmt) -> Result<(), String> {
         match s {
             Stmt::Empty => {
-                println!("AN EMPTY AND FUTILE GESTURE");
                 return Ok(());
             },
             Stmt::ExprStmt(e) => {
@@ -292,7 +302,7 @@ impl Interpreter {
                 return self.eval_expr(*e);
             },
             Expr::Var(s) => {
-                if let Some(v) = self._G.get(&Value::String(s)) {
+                if let Some(v) = self.find_var(s) {
                     return v.clone();
                 }
                 Value::Nil
