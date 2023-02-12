@@ -6,6 +6,5 @@ pub enum Expr {
     Literal(Value),
     Grouping(Box<Expr>),
     Var(String),
-    Varlist(Vec<Expr>),
     Exprlist(Vec<Expr>),
 }

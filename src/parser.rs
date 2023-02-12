@@ -26,8 +26,11 @@ impl Parser {
             }
             return expr_res;
         } else if let Token::Identifier(s) = self.current_token() {
+            println!("Parser: Variable {s}");
             self.advance();
             return Ok(Expr::Var(s.clone()));
+        } else if Token::Assign == self.current_token() {
+            println!("It's Assign");
         }
         return Err("Unknown token".into());
     }
@@ -125,29 +128,20 @@ impl Parser {
         return Ok(Expr::Exprlist(expr_vec));
     }
 
-    fn var_list(&mut self, first_var_name: String) -> Result<Expr, String> {
-        let mut var_vec = vec![Expr::Var(first_var_name)];
-        self.advance();
-        while self.check_token_type(Token::Comma) {
-            if let Token::Identifier(s) = self.current_token() {
-                var_vec.push(Expr::Var(s));
-                self.advance();
-            }
-        }
-        return Ok(Expr::Varlist(var_vec));
-    }
-
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.check_token_type(Token::Semicolon) {
             return Ok(Stmt::Empty);
         }
         if let Token::Identifier(s) = self.current_token() {
-            let var_list = self.var_list(s)?;
+            let var_list = self.expr_list()?;
             if self.check_token_type(Token::Assign) {
                 let expr_list = self.expr_list()?;
+                println!("Parser: Assignment statement");
                 return Ok(Stmt::Assignment(var_list, expr_list));
             }
+            return Ok(Stmt::ExprStmt(Expr::Var(s)));
         }
+        println!("Parser: Expression statement");
         return Ok(Stmt::ExprStmt(self.expression()?));
     }
 
@@ -160,6 +154,7 @@ impl Parser {
 
         while self.current < self.tokens.len() - 1 {
             res.push(self.statement()?);
+            println!("Parser: End of statement");
         }
         res.push(self.statement()?);
         Ok(res)

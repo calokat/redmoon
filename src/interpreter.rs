@@ -157,6 +157,7 @@ impl Interpreter {
     }
     
     pub fn eval_stmt(&mut self, s: Stmt) -> Result<(), String> {
+        println!("Evaluating statement");
         match s {
             Stmt::Empty => {
                 return Ok(());
@@ -190,7 +191,7 @@ impl Interpreter {
                         val_vec.push(self.eval_expr(e));
                     }
                 }
-                if let Expr::Varlist(var_list) = var {
+                if let Expr::Exprlist(var_list) = var {
                     let mut var_dq = VecDeque::from(var_list);
                     let mut val_dq = VecDeque::from(val_vec);
                     while let Some(Expr::Var(var)) = var_dq.pop_front() {
@@ -307,12 +308,32 @@ impl Interpreter {
                 }
                 Value::Nil
             },
-            Expr::Exprlist(_) => {
-                panic!("How did Exprlist this get here?");
+            Expr::Exprlist(el) => {
+                let mut res = String::new();
+                for e in el {
+                    let e_res = self.eval_expr(e);
+                    match e_res {
+                        Value::Boolean(b) => {
+                            if b  {
+                                res += "True\t";
+                            } else {
+                                res += "False\t";
+                            }
+                        },
+                        Value::Nil => {
+                            res += "Nil\t"
+                        },
+                        Value::Number(n) => {
+                            let n = n.0;
+                            res += format!("{n}\t").as_str();
+                        },
+                        Value::String(s) => {
+                            res += &(s + "\t");
+                        }
+                    }
+                }
+                return Value::String(res);
             },
-            Expr::Varlist(_) => {
-                panic!("How did this Varlist get here?");
-            }
         }
     }
 }
