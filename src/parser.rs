@@ -28,8 +28,6 @@ impl Parser {
         } else if let Token::Identifier(s) = self.current_token() {
             self.advance();
             return Ok(Expr::Var(s.clone()));
-        } else if Token::Equals == self.current_token() {
-            println!("Aha advance strikes again");
         }
         return Err("Unknown token".into());
     }
@@ -82,7 +80,6 @@ impl Parser {
     fn concat(&mut self) -> Result<Expr, String> {
         let mut expr = self.term()?;
         while self.check_token_type(Token::Concatenation) {
-            println!("Concat checking");
             expr = Expr::Binary(Box::new(expr), Token::Concatenation, Box::new(self.term()?));
         }
         return Ok(expr);
@@ -117,10 +114,7 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, String> {
-        if self.tokens.len() > 0 {
-            return self.equality();
-        }
-        return Err("No valid tokens".into());
+        return self.equality();
     }
 
     fn expr_list(&mut self) -> Result<Expr, String> {
@@ -143,10 +137,7 @@ impl Parser {
         return Ok(Expr::Varlist(var_vec));
     }
 
-    pub fn statement(&mut self) -> Result<Stmt, String> {
-        if self.tokens.len() == 0 {
-            return Err("No valid tokens".into());
-        }
+    fn statement(&mut self) -> Result<Stmt, String> {
         if self.check_token_type(Token::Semicolon) {
             return Ok(Stmt::Empty);
         }
@@ -158,6 +149,20 @@ impl Parser {
             }
         }
         return Ok(Stmt::ExprStmt(self.expression()?));
+    }
+
+    pub fn chunk(&mut self) -> Result<Vec<Stmt>, String> {
+        if self.tokens.len() == 0 {
+            return Err("No valid tokens".into());
+        }
+
+        let mut res = vec![];
+
+        while self.current < self.tokens.len() - 1 {
+            res.push(self.statement()?);
+        }
+        res.push(self.statement()?);
+        Ok(res)
     }
 
     fn current_token(&self) -> Token {

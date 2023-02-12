@@ -28,15 +28,12 @@ fn main() {
                 let mut lexer = Lexer::new(expr.as_str());
                 let tokens = lexer.tokenize();
                 let mut parser = Parser::new(tokens);
-                let smt = parser.statement();
-                match smt {
-                    Ok(smt) => {
-                        if let Err(s) = interp.eval_stmt(smt) {
-                            println!("{}", s);
+                let chunk = parser.chunk();
+                if let Ok(chunk) = chunk {
+                    for smt in chunk {
+                        if let Err(err) = interp.eval_stmt(smt) {
+                            println!("{err}");
                         }
-                    },
-                    Err(s) => {
-                        println!("{}", s);
                     }
                 }
             },
