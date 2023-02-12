@@ -128,21 +128,20 @@ impl Parser {
         return Ok(Expr::Exprlist(expr_vec));
     }
 
+    fn assignment(&mut self) -> Result<Stmt, String> {
+        let expr = self.expr_list()?;
+        if self.check_token_type(Token::Assign) {
+            let right = self.expr_list()?;
+            return Ok(Stmt::Assignment(expr, right));
+        }
+        return Ok(Stmt::ExprStmt(expr));
+    }
+
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.check_token_type(Token::Semicolon) {
             return Ok(Stmt::Empty);
         }
-        if let Token::Identifier(s) = self.current_token() {
-            let var_list = self.expr_list()?;
-            if self.check_token_type(Token::Assign) {
-                let expr_list = self.expr_list()?;
-                println!("Parser: Assignment statement");
-                return Ok(Stmt::Assignment(var_list, expr_list));
-            }
-            return Ok(Stmt::ExprStmt(Expr::Var(s)));
-        }
-        println!("Parser: Expression statement");
-        return Ok(Stmt::ExprStmt(self.expression()?));
+        return self.assignment();
     }
 
     pub fn chunk(&mut self) -> Result<Vec<Stmt>, String> {
