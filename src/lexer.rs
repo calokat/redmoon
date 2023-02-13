@@ -5,8 +5,58 @@ pub struct Lexer<'a> {
     current: usize
 }
 
+const RESERVED_WORDS: [&str; 22] = [
+    "and",
+    "break",
+    "do",
+    "else",
+    "elseif",
+    "end",
+    "false",
+    "for",
+    "function",
+    "goto",
+    "if",
+    "in",
+    "local",
+    "nil",
+    "not",
+    "or",
+    "return",
+    "repeat",
+    "then",
+    "true",
+    "until",
+    "while",
+];
+
+const RESERVED_WORDS_TOKENS: [Token; 22] = [
+    Token::And,
+    Token::Break,
+    Token::Do,
+    Token::Else,
+    Token::Elseif,
+    Token::End,
+    Token::False,
+    Token::For,
+    Token::Function,
+    Token::Goto,
+    Token::If,
+    Token::In,
+    Token::Local,
+    Token::Nil,
+    Token::Not,
+    Token::Or,
+    Token::Return,
+    Token::Repeat,
+    Token::Then,
+    Token::True,
+    Token::Until,
+    Token::While,
+];
+
 impl<'a> Lexer<'a> {
-    pub fn new(s: &'a str) -> Self {
+    pub fn new(s: &'a str) -> Self {    
         return Self { expr_str: s, current: 0 };
     }
 
@@ -81,20 +131,25 @@ impl<'a> Lexer<'a> {
             }
             break;
         };
-            return Token::Literal(Value::Number(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid parse")));
+            return Token::Literal(Value::Number(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid scan")));
     }
 
     fn lex_identifier(&mut self) -> Token {
         let scan_start = self.current;
         while self.current < self.expr_str.len() {
             let c = self.current_char();
-            if c.is_alphabetic() ||
+            if c.is_alphanumeric() ||
              c == '_' {
                 self.advance();
                 continue;
             }
             break;
         };
+
+        if let Ok(r_idx) = RESERVED_WORDS.binary_search(&&self.expr_str[scan_start..self.current]) {
+            return RESERVED_WORDS_TOKENS[r_idx].clone();
+        }
+
             println!("{}", &self.expr_str[scan_start..self.current]);
             return Token::Identifier(self.expr_str[scan_start..self.current].into());
     }
