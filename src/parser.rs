@@ -137,11 +137,46 @@ impl Parser {
         return Ok(Stmt::ExprStmt(expr));
     }
 
+    fn do_block(&mut self) -> Result<Vec<Stmt>, String> {
+        let mut res = vec![];
+        while !self.check_token_type(Token::End) {
+            res.push(self.statement()?);
+        }
+        return Ok(res);
+    }
+
+    fn local_assignment(&mut self) -> Result<Stmt, String> {
+        let assign_stmt = self.assignment()?;
+        match assign_stmt {
+            Stmt::Assignment(vars, vals) => {
+                return Ok(Stmt::LocalAssignment(vars, vals));
+            },
+            Stmt::ExprStmt(vars) => {
+                return Ok(Stmt::LocalAssignment(vars, Expr::Exprlist(vec![])));
+            },
+            _ => Err("Invalid local assignment".into())
+        }
+    }
+
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.check_token_type(Token::Semicolon) {
             return Ok(Stmt::Empty);
+        } else if self.check_token_type(Token::Do) {
+            let res = self.do_block()?;
+            return Ok(Stmt::Block(res));
+        } else if self.check_token_type(Token::Local) {
+            return self.local_assignment();
         }
         return self.assignment();
+    }
+
+
+    fn block(&mut self) -> Result<Vec<Stmt>, String> {
+        let mut res = vec![];
+        while self.current < self.tokens.len() - 1 {
+            res.push(self.statement()?);
+        }
+        Ok(res)
     }
 
     pub fn chunk(&mut self) -> Result<Vec<Stmt>, String> {
@@ -149,14 +184,7 @@ impl Parser {
             return Err("No valid tokens".into());
         }
 
-        let mut res = vec![];
-
-        while self.current < self.tokens.len() - 1 {
-            res.push(self.statement()?);
-            println!("Parser: End of statement");
-        }
-        res.push(self.statement()?);
-        Ok(res)
+        return Ok(self.block()?);
     }
 
     fn current_token(&self) -> Token {

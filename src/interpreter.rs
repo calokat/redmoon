@@ -1,5 +1,5 @@
 use crate::{Token, Expr, Stmt, Value};
-use std::collections::{HashMap, VecDeque};
+use std::{collections::{HashMap, VecDeque}, borrow::BorrowMut};
 
 type Table = HashMap<Value, Value>;
 
@@ -11,6 +11,23 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self { _G: Table::new(), stack: VecDeque::new() }
+    }
+
+    fn push_env(&mut self) {
+        self.stack.push_back(Table::new());
+    }
+
+    fn pop_env(&mut self) {
+        self.stack.pop_back();
+    }
+
+    fn get_current_stack_env(&mut self) -> &mut Table {
+        if let Some(env) = self.stack.back_mut() {
+            return env;
+        } else {
+            return self._G.borrow_mut();
+        }
+
     }
 
     fn find_var(&self, name: String) -> Option<&Value> {
@@ -205,6 +222,40 @@ impl Interpreter {
                     return Err("Cannot assign to this".into());
                 }
                 return Ok(());
+            },
+            Stmt::LocalAssignment(var, val) => {
+                println!("Evaluating local assignment");
+                let mut val_vec = vec![];
+                if let Expr::Exprlist(el) = val {
+                    for e in el.into_iter() {
+                        val_vec.push(self.eval_expr(e));
+                    }
+                }
+                if let Expr::Exprlist(var_list) = var {
+                    let mut var_dq = VecDeque::from(var_list);
+                    let mut val_dq = VecDeque::from(val_vec);
+                    while let Some(Expr::Var(var)) = var_dq.pop_front() {
+                        if let Some(value) = val_dq.pop_front() {
+                            self.get_current_stack_env().insert(Value::String(var), value);
+                        } else {
+                            self.get_current_stack_env().insert(Value::String(var), Value::Nil);
+                        }
+                    }
+                } else {
+                    return Err("Cannot assign to this".into());
+                }
+                return Ok(());
+
+            }
+            Stmt::Block(stmts) => {
+                self.push_env();
+                for s in stmts {
+                   if let Err(err) = self.eval_stmt(s) {
+                    return Err(err);
+                   }
+                }
+                self.pop_env();
+                Ok(())
             }
         }
     }
