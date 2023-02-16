@@ -147,7 +147,12 @@ impl<'a> Lexer<'a> {
         };
 
         if let Ok(r_idx) = RESERVED_WORDS.binary_search(&&self.expr_str[scan_start..self.current]) {
-            return RESERVED_WORDS_TOKENS[r_idx].clone();
+            return match r_idx {
+                6 => Token::Literal(Value::Boolean(false)),
+                13 => Token::Literal(Value::Nil),
+                19 => Token::Literal(Value::Boolean(true)),
+                _ => RESERVED_WORDS_TOKENS[r_idx].clone()
+            }
         }
 
             println!("{}", &self.expr_str[scan_start..self.current]);

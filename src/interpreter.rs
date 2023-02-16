@@ -132,16 +132,31 @@ impl Interpreter {
     }
     
     fn equals(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 == f2);
-                    Value::Boolean(f1 == f2)
-                },
-                _ => panic!("Comparison only applies to numbers")
+        match t1 {
+            Value::Number(n1) => {
+                match t2 {
+                    Value::Number(n2) => Value::Boolean(n1 == n2),
+                    _ => Value::Boolean(false)
+                }
+            },
+            Value::Nil => {
+                match t2 {
+                    Value::Nil => Value::Boolean(true),
+                    _ => Value::Boolean(false)
+                }
+            },
+            Value::Boolean(b1) => {
+                match t2 {
+                    Value::Boolean(b2) => Value::Boolean(b1 == b2),
+                    _ => Value::Boolean(false)
+                }
+            },
+            Value::String(s1) => {
+                match t2 {
+                    Value::String(s2) => Value::Boolean(s1 == s2),
+                    _ => Value::Boolean(false)
+                }
             }
-        } else {
-            panic!("Comparison only applies to numbers");
         }
     }
     
@@ -170,6 +185,15 @@ impl Interpreter {
             }
         } else {
             panic!("Comparison only applies to numbers");
+        }
+    }
+
+    fn is_truthy(&self, v: Value) -> bool {
+        match v {
+            Value::String(s) => !s.is_empty(),
+            Value::Nil => false,
+            Value::Boolean(b) => b,
+            _ => true
         }
     }
     
@@ -256,6 +280,14 @@ impl Interpreter {
                 }
                 self.pop_env();
                 Ok(())
+            },
+            Stmt::IfStmt(cond, body) => {
+                let cond_res = self.eval_expr(cond);
+                let mut eval_res = Ok(());
+                if self.is_truthy(cond_res) {
+                     eval_res = self.eval_stmt(*body);
+                }
+                eval_res
             }
         }
     }

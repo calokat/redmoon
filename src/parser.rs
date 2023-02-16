@@ -139,9 +139,10 @@ impl Parser {
 
     fn do_block(&mut self) -> Result<Vec<Stmt>, String> {
         let mut res = vec![];
-        while !self.check_token_type(Token::End) {
+        while !self.check_token_type(Token::End) && self.current < self.tokens.len() - 1 {
             res.push(self.statement()?);
         }
+        assert!(self.previous_token() == Token::End, "Missing \"End\" keyword");
         return Ok(res);
     }
 
@@ -166,6 +167,11 @@ impl Parser {
             return Ok(Stmt::Block(res));
         } else if self.check_token_type(Token::Local) {
             return self.local_assignment();
+        } else if self.check_token_type(Token::If) {
+            let cond = self.expression()?;
+            assert!(self.check_token_type(Token::Then), "If statement missing \"then\" keyword");
+            let body = self.do_block()?;
+            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(body))));
         }
         return self.assignment();
     }
