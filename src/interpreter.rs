@@ -278,11 +278,13 @@ impl Interpreter {
 
             }
             Stmt::Block(stmts) => {
+                self.push_env();
                 for s in stmts {
                    if let Err(err) = self.eval_stmt(s) {
                     return Err(err);
                    }
                 }
+                self.pop_env();
                 Ok(())
             },
             Stmt::IfStmt(cond, body) => {
