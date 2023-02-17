@@ -159,6 +159,14 @@ impl Parser {
         }
     }
 
+    fn repeat_body(&mut self) -> Result<Stmt, String> {
+        let mut body = vec![];
+        while !self.check_token_type(Token::Until) {
+            body.push(self.statement()?);
+        }
+        Ok(Stmt::Block(body))
+    }
+
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.check_token_type(Token::Semicolon) {
             return Ok(Stmt::Empty);
@@ -177,6 +185,10 @@ impl Parser {
             assert!(self.check_token_type(Token::Do), "while loop missing \"do\" keyword");
             let body = self.do_block()?;
             return Ok(Stmt::WhileLoop(cond, Box::new(Stmt::Block(body))));
+        } else if self.check_token_type(Token::Repeat) {
+            let body = self.repeat_body()?;
+            let cond = self.expression()?;
+            return Ok(Stmt::RepeatUntilLoop(Box::new(body), cond));
         }
         return self.assignment();
     }

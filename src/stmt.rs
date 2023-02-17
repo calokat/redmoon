@@ -7,4 +7,5 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     IfStmt(Expr, /* conditional */ Box<Stmt> /* body */),
     WhileLoop(Expr, /* conditional */ Box<Stmt> /* body */),
+    RepeatUntilLoop(Box<Stmt>, Expr),
 }

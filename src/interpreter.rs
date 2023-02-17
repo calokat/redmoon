@@ -278,20 +278,20 @@ impl Interpreter {
 
             }
             Stmt::Block(stmts) => {
-                self.push_env();
                 for s in stmts {
                    if let Err(err) = self.eval_stmt(s) {
                     return Err(err);
                    }
                 }
-                self.pop_env();
                 Ok(())
             },
             Stmt::IfStmt(cond, body) => {
                 let cond_res = self.eval_expr(&cond);
                 let mut eval_res = Ok(());
                 if self.is_truthy(cond_res) {
-                     eval_res = self.eval_stmt(&*body);
+                    self.push_env();
+                    eval_res = self.eval_stmt(&*body);
+                    self.pop_env();
                 }
                 eval_res
             },
@@ -307,6 +307,21 @@ impl Interpreter {
                     } else {
                         break;
                     }
+                }
+                Ok(())
+            },
+            Stmt::RepeatUntilLoop(body, cond) => {
+                loop {
+                    self.push_env();
+                    if let Err(s) = self.eval_stmt(&*body) {
+                        return Err(s);
+                    }
+                    let cond_res = self.eval_expr(cond);
+                    if self.is_truthy(cond_res) {
+                        self.pop_env();
+                        break;
+                    }
+                    self.pop_env();
                 }
                 Ok(())
             }
