@@ -197,14 +197,14 @@ impl Interpreter {
         }
     }
     
-    pub fn eval_stmt(&mut self, s: Stmt) -> Result<(), String> {
+    pub fn eval_stmt(&mut self, s: &Stmt) -> Result<(), String> {
         println!("Evaluating statement");
         match s {
             Stmt::Empty => {
                 return Ok(());
             },
             Stmt::ExprStmt(e) => {
-                let v = self.eval_expr(e);
+                let v = self.eval_expr(&e);
                 match v {
                     Value::Boolean(b) => {
                         println!("{}", b);
@@ -229,17 +229,19 @@ impl Interpreter {
                 let mut val_vec = vec![];
                 if let Expr::Exprlist(el) = val {
                     for e in el.into_iter() {
-                        val_vec.push(self.eval_expr(e));
+                        val_vec.push(self.eval_expr(&e));
                     }
                 }
                 if let Expr::Exprlist(var_list) = var {
-                    let mut var_dq = VecDeque::from(var_list);
-                    let mut val_dq = VecDeque::from(val_vec);
-                    while let Some(Expr::Var(var)) = var_dq.pop_front() {
-                        if let Some(value) = val_dq.pop_front() {
-                            self._G.insert(Value::String(var), value);
-                        } else {
-                            self._G.insert(Value::String(var), Value::Nil);
+                    let mut val_counter = 0;
+                    for var in var_list.iter() {
+                        if let Expr::Var(var_name) = var {
+                            if let Some(val) = val_vec.get(val_counter) {
+                                self._G.insert(Value::String(var_name.clone()), val.clone());
+                            } else {
+                                self._G.insert(Value::String(var_name.clone()), Value::Nil);
+                            }
+                            val_counter += 1;
                         }
                     }
                 } else {
@@ -252,17 +254,21 @@ impl Interpreter {
                 let mut val_vec = vec![];
                 if let Expr::Exprlist(el) = val {
                     for e in el.into_iter() {
-                        val_vec.push(self.eval_expr(e));
+                        val_vec.push(self.eval_expr(&e));
                     }
                 }
                 if let Expr::Exprlist(var_list) = var {
-                    let mut var_dq = VecDeque::from(var_list);
-                    let mut val_dq = VecDeque::from(val_vec);
-                    while let Some(Expr::Var(var)) = var_dq.pop_front() {
-                        if let Some(value) = val_dq.pop_front() {
-                            self.get_current_stack_env().insert(Value::String(var), value);
+                    let mut val_counter = 0;
+                    for var in var_list.iter() {
+                        if let Expr::Var(var_name) = var {
+                            if let Some(val) = val_vec.get(val_counter) {
+                                self.get_current_stack_env().insert(Value::String(var_name.clone()), val.clone());
+                            } else {
+                                self.get_current_stack_env().insert(Value::String(var_name.clone()), Value::Nil);
+                            }
+                            val_counter += 1;
                         } else {
-                            self.get_current_stack_env().insert(Value::String(var), Value::Nil);
+                            return Err("Cannot assign to this".into());
                         }
                     }
                 } else {
@@ -282,69 +288,84 @@ impl Interpreter {
                 Ok(())
             },
             Stmt::IfStmt(cond, body) => {
-                let cond_res = self.eval_expr(cond);
+                let cond_res = self.eval_expr(&cond);
                 let mut eval_res = Ok(());
                 if self.is_truthy(cond_res) {
-                     eval_res = self.eval_stmt(*body);
+                     eval_res = self.eval_stmt(&*body);
                 }
                 eval_res
+            },
+            Stmt::WhileLoop(cond, body) => {
+                loop {
+                    let cond_res = self.eval_expr(&cond);
+                    if self.is_truthy(cond_res) {
+                        self.push_env();
+                        if let Err(s) = self.eval_stmt(&*body) {
+                            return Err(s);
+                        }
+                        self.pop_env();
+                    } else {
+                        break;
+                    }
+                }
+                Ok(())
             }
         }
     }
     
     
-    fn eval_expr(&mut self, expr: Expr) -> Value {
+    fn eval_expr(&mut self, expr: &Expr) -> Value {
         match expr {
             Expr::Binary(o1, op, o2) => {
                 match op {
                     Token::Plus => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::add_vals(t1, t2);
                     },
                     Token::Minus => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::subtract_vals(t1, t2);
                     },
                     Token::Star => {
-                        let t1 = self.eval_expr(*o1);
-                        let t3 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t3 = self.eval_expr(&*o2);
                         return Self::multiply_vals(t1, t3);
                     },
                     Token::ForwardSlash => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::divide_vals(t1, t2);
                     },
                     Token::LessThanOrEqual => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::less_than_or_equal(t1, t2);
                     },
                     Token::LessThan => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::less_than(t1, t2);
                     },
                     Token::Equals => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(*&o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::equals(t1, t2);
                     },
                     Token::GreaterThanOrEqual => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::greater_than_or_equal(t1, t2);
                     },
                     Token::GreaterThan => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         return Self::greater_than(t1, t2);
                     },
                     Token::Concatenation => {
-                        let t1 = self.eval_expr(*o1);
-                        let t2 = self.eval_expr(*o2);
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
                         let s1 = self.stringify(t1);
                         let s2 = self.stringify(t2);
                         if let Ok(Value::String(s1)) = s1 {
@@ -358,18 +379,23 @@ impl Interpreter {
                 }
             },
             Expr::Literal(t) => {
-                t
+                match t {
+                    Value::Boolean(b) => Value::Boolean(*b),
+                    Value::Nil => Value::Nil,
+                    Value::String(s) => Value::String(s.clone()),
+                    Value::Number(n) => Value::Number(*n)
+                }
             },
             Expr::Unary(e, op) => {
-                if op == Token::Minus {
-                    if let Expr::Literal(t) = *e {
+                if op == &Token::Minus {
+                    if let Expr::Literal(t) = &**e {
                         if let Value::Number(n) = t {
                             return Value::Number(-n);
                         } else {
                             panic!("Unsupported negation");
                         }
-                    } else if let Expr::Grouping(expr) = *e {
-                    let eval_res = self.eval_expr(*expr);
+                    } else if let Expr::Grouping(expr) = &**e {
+                    let eval_res = self.eval_expr(&*expr);
                         if let Value::Number(i) = eval_res {
                             return Value::Number(-i);
                         } else {
@@ -383,10 +409,10 @@ impl Interpreter {
                 }
             },
             Expr::Grouping(e) => {
-                return self.eval_expr(*e);
+                return self.eval_expr(&*e);
             },
             Expr::Var(s) => {
-                if let Some(v) = self.find_var(s) {
+                if let Some(v) = self.find_var(s.clone()) {
                     return v.clone();
                 }
                 Value::Nil

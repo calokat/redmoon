@@ -172,6 +172,11 @@ impl Parser {
             assert!(self.check_token_type(Token::Then), "If statement missing \"then\" keyword");
             let body = self.do_block()?;
             return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(body))));
+        } else if self.check_token_type(Token::While) {
+            let cond = self.expression()?;
+            assert!(self.check_token_type(Token::Do), "while loop missing \"do\" keyword");
+            let body = self.do_block()?;
+            return Ok(Stmt::WhileLoop(cond, Box::new(Stmt::Block(body))));
         }
         return self.assignment();
     }

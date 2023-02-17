@@ -52,7 +52,7 @@ fn exec(expr: String, interp: &mut Interpreter) {
     let chunk = parser.chunk();
     if let Ok(chunk) = chunk {
         for smt in chunk {
-            if let Err(err) = interp.eval_stmt(smt) {
+            if let Err(err) = interp.eval_stmt(&smt) {
                 println!("{err}");
             }
         }
