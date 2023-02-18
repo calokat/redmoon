@@ -30,8 +30,8 @@ impl Interpreter {
 
     }
 
-    fn find_var(&self, name: String) -> Option<&Value> {
-        let val_key = Value::String(name);
+    fn find_var(&self, name: &String) -> Option<&Value> {
+        let val_key = Value::String(name.clone());
         for t in self.stack.iter() {
             if let Some(ret) = t.get(&val_key) {
                 return Some(ret);
@@ -156,6 +156,12 @@ impl Interpreter {
                     Value::String(s2) => Value::Boolean(s1 == s2),
                     _ => Value::Boolean(false)
                 }
+            },
+            Value::FunctionDef(f1) => {
+                match t2 {
+                    Value::FunctionDef(f2) => Value::Boolean(f1 == f2),
+                    _ => Value::Boolean(false)
+                }
             }
         }
     }
@@ -222,6 +228,10 @@ impl Interpreter {
                         println!("{}", s);
                         return Ok(());
                     },
+                    Value::FunctionDef(_fd) => {
+                        println!("Function definition");
+                        return Ok(());
+                    }
                 }
             },
             Stmt::Assignment(var, val) => {
@@ -400,7 +410,8 @@ impl Interpreter {
                     Value::Boolean(b) => Value::Boolean(*b),
                     Value::Nil => Value::Nil,
                     Value::String(s) => Value::String(s.clone()),
-                    Value::Number(n) => Value::Number(*n)
+                    Value::Number(n) => Value::Number(*n),
+                    Value::FunctionDef(fd) => Value::FunctionDef(fd.clone())
                 }
             },
             Expr::Unary(e, op) => {
@@ -426,10 +437,15 @@ impl Interpreter {
                 }
             },
             Expr::Grouping(e) => {
+                if let Expr::Exprlist(el) = &**e {
+                    if el.len() == 1 {
+                        return self.eval_expr(&el[0]);
+                    }
+                }
                 return self.eval_expr(&*e);
             },
             Expr::Var(s) => {
-                if let Some(v) = self.find_var(s.clone()) {
+                if let Some(v) = self.find_var(s) {
                     return v.clone();
                 }
                 Value::Nil
@@ -455,11 +471,37 @@ impl Interpreter {
                         },
                         Value::String(s) => {
                             res += &(s + "\t");
+                        },
+                        Value::FunctionDef(_) => {
+                            res += "<function>".into()
                         }
                     }
                 }
                 return Value::String(res);
             },
+            Expr::FunctionCall(func_id, _vars) => {
+                println!("Return statements coming soon");
+                if let Expr::Var(func_id) = &**func_id {
+                    let func_val = self.find_var(func_id);
+                    match func_val {
+                        Some(v) => {
+                            match v {
+                                Value::FunctionDef(fd) => {
+                                    if let Err(s) = self.eval_stmt(&*fd.get_impl().body.clone()) {
+                                        println!("{s}");
+                                        return Value::Nil;
+                                    }
+                                }
+                                _ => {
+
+                                }
+                            }
+                        },
+                        _ => {println!("Cannot call value");}
+                    }
+                }
+                return Value::Nil;
+            }
         }
     }
 }

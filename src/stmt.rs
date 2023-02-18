@@ -1,4 +1,5 @@
 use crate::Expr;
+#[derive(Clone)]
 pub enum Stmt {
     Empty,
     ExprStmt(Expr),

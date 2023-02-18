@@ -5,6 +5,7 @@ mod lexer;
 mod interpreter;
 mod stmt;
 mod values;
+mod function;
 
 use std::io;
 use interpreter::Interpreter;
@@ -35,7 +36,7 @@ fn main() {
                 if expr.trim().to_lowercase() == "quit" {
                     break;
                 }
-                exec(expr, &mut interp);                
+                exec(expr, &mut interp);
             },
             Err(_) => {
                 println!("Error while reading input");

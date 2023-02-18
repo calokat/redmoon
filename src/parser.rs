@@ -1,4 +1,4 @@
-use crate::{Token, Expr, Stmt};
+use crate::{Token, Expr, Stmt, function::Function, values::Value};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -11,12 +11,12 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr, String> {
-        if let Token::Literal(v) = self.current_token() {
+        if let Some(Token::Literal(v)) = self.current_token() {
             self.advance();
             return Ok(Expr::Literal(v.clone()));
-        } else if self.current_token() == Token::LeftParens {
+        } else if self.current_token() == Some(Token::LeftParens) {
             self.advance();
-            let expr_res = self.expression();
+            let expr_res = self.expr_list();
             if let Ok(expr) = expr_res {
                 let expr = Expr::Grouping(Box::new(expr));
                 if !self.check_token_type(Token::RightParens) {
@@ -25,14 +25,54 @@ impl Parser {
                 return Ok(expr);    
             }
             return expr_res;
-        } else if let Token::Identifier(s) = self.current_token() {
+        } else if let Some(Token::Identifier(s)) = self.current_token() {
             println!("Parser: Variable {s}");
             self.advance();
+            if self.check_token_type(Token::LeftParens) {
+                if !self.check_token_type(Token::RightParens) {
+                    let args = self.expr_list()?;
+                    if !self.check_token_type(Token::RightParens) {
+                        return Err("Function call is missing right parens".into());
+                    }
+                    if let Expr::Exprlist(args) = args {
+                        println!("Parsing call of function {s} with {} args", args.len());
+                        return Ok(Expr::FunctionCall(Box::new(Expr::Var(s.clone())), args));
+                    }
+                } else {
+                    return Ok(Expr::FunctionCall(Box::new(Expr::Var(s.clone())), vec![]));
+                }
+
+            }
             return Ok(Expr::Var(s.clone()));
-        } else if Token::Assign == self.current_token() {
-            println!("It's Assign");
+        } else if Some(Token::Function) == self.current_token() {
+            return self.function_def();
         }
         return Err("Unknown token".into());
+    }
+
+    fn function_def(&mut self) -> Result<Expr, String> {
+        self.advance();
+        let mut f_name = None;
+        if let Some(Token::Identifier(s)) = self.current_token() {
+            f_name = Some(s);
+            self.advance();
+        }
+        assert!(self.check_token_type(Token::LeftParens), "Function definition needs an opening parentheses");
+        let params ;
+        
+        if self.current_token() != Some(Token::RightParens) {
+            params = self.expr_list()?
+        } else {
+            params = Expr::Exprlist(vec![]);
+        }
+
+        assert!(self.check_token_type(Token::RightParens), "Function definition needs a closing parentheses");
+        if let Expr::Exprlist(params) = params {
+            let body = Box::new(Stmt::Block(self.do_block()?));
+            return Ok(Expr::Literal(Value::FunctionDef(Function::new(body, params, f_name))));
+        } else {
+            return Err("Invalid parameter in function definition".into());
+        }
     }
 
     fn unary(&mut self) -> Result<Expr, String> {
@@ -129,6 +169,19 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Stmt, String> {
+        if self.current_token() == Some(Token::Function) {
+            let func = self.function_def()?;
+            if let Expr::Literal(Value::FunctionDef(fd)) = func {
+                if let Some(id_str) = fd.get_impl().name.clone() {
+                    println!("Assigning function value to var {id_str}");
+                    return Ok(Stmt::Assignment(Expr::Exprlist(vec![Expr::Var(id_str)]), Expr::Exprlist(vec![Expr::Literal(Value::FunctionDef(fd))])));
+                } else {
+                    return Err("Cannot assign to function without name".into());
+                }
+            } else {
+                return Err("Invalid function definition".into());
+            }
+        }
         let expr = self.expr_list()?;
         if self.check_token_type(Token::Assign) {
             let right = self.expr_list()?;
@@ -139,7 +192,7 @@ impl Parser {
 
     fn do_block(&mut self) -> Result<Vec<Stmt>, String> {
         let mut res = vec![];
-        while !self.check_token_type(Token::End) && self.current < self.tokens.len() - 1 {
+        while !self.check_token_type(Token::End) && self.current < self.tokens.len() {
             res.push(self.statement()?);
         }
         assert!(self.previous_token() == Token::End, "Missing \"End\" keyword");
@@ -196,7 +249,7 @@ impl Parser {
 
     fn block(&mut self) -> Result<Vec<Stmt>, String> {
         let mut res = vec![];
-        while self.current < self.tokens.len() - 1 {
+        while self.current < self.tokens.len() {
             res.push(self.statement()?);
         }
         Ok(res)
@@ -210,8 +263,8 @@ impl Parser {
         return Ok(self.block()?);
     }
 
-    fn current_token(&self) -> Token {
-        return self.tokens[self.current].clone();
+    fn current_token(&self) -> Option<Token> {
+        return self.tokens.get(self.current).cloned();
     }
 
     fn previous_token(&self) -> Token {
@@ -223,13 +276,13 @@ impl Parser {
     }
 
     fn advance(&mut self) {
-        if self.current < self.tokens.len() - 1 {
+        if self.current < self.tokens.len() {
             self.current += 1;
         }
     }
 
     fn check_token_type(&mut self, _type: Token) -> bool {
-        let res = self.current_token() == _type;
+        let res = self.current_token() == Some(_type);
         if res {
             self.advance();
         }
