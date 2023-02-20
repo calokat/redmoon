@@ -69,6 +69,12 @@ impl<'a> Lexer<'a> {
             } else if c.is_numeric() {
                 ret.push(self.lex_number());
             } else if self.is_operator(c) {
+                if self.peek_next_char() == Some('-') {
+                    while self.current_char() != '\n' {
+                        self.advance();
+                    }
+                    continue;
+                }
                 ret.push(self.lex_operator(c));
             } else if c == '(' {
                 ret.push(Token::LeftParens);
