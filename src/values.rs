@@ -1,6 +1,6 @@
 use ordered_float::OrderedFloat;
 use crate::function::Function;
-
+use crate::table::UserTable;
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum Value {
     Boolean(bool),
@@ -8,4 +8,5 @@ pub enum Value {
     String(String),
     Nil,
     FunctionDef(Function),
+    Table(UserTable)
 }

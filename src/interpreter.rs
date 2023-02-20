@@ -1,7 +1,6 @@
-use crate::{Token, Expr, Stmt, Value};
-use std::{collections::{HashMap, VecDeque}, borrow::BorrowMut};
+use crate::{Token, Expr, Stmt, Value, table::{Table, UserTable}};
+use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}};
 
-type Table = HashMap<Value, Value>;
 
 pub struct Interpreter {
     _G: Table,
@@ -162,6 +161,12 @@ impl Interpreter {
                     Value::FunctionDef(f2) => Value::Boolean(f1 == f2),
                     _ => Value::Boolean(false)
                 }
+            },
+            Value::Table(ut1) => {
+                match t2 {
+                    Value::Table(ut2) => Value::Boolean(ut1 == ut2),
+                    _ => Value::Boolean(false)
+                }
             }
         }
     }
@@ -202,9 +207,8 @@ impl Interpreter {
             _ => true
         }
     }
-    
+
     pub fn eval_stmt(&mut self, s: &Stmt) -> Result<(), String> {
-        println!("Evaluating statement");
         match s {
             Stmt::Empty => {
                 return Ok(());
@@ -231,11 +235,14 @@ impl Interpreter {
                     Value::FunctionDef(_fd) => {
                         println!("Function definition");
                         return Ok(());
+                    },
+                    Value::Table(_ut) => {
+                        println!("Table!");
+                        return Ok(())
                     }
                 }
             },
             Stmt::Assignment(var, val) => {
-                println!("Evaluating assignment");
                 let mut val_vec = vec![];
                 if let Expr::Exprlist(el) = val {
                     for e in el.into_iter() {
@@ -251,8 +258,15 @@ impl Interpreter {
                             } else {
                                 self._G.insert(Value::String(var_name.clone()), Value::Nil);
                             }
-                            val_counter += 1;
+                        } else if let Expr::Accessor(accessors, field) = var {
+                            println!("Hello darkness");
+                            let key = self.eval_expr(field.as_ref());
+                            let resolved_accessors = self.eval_expr(accessors.as_ref());
+                            if let Value::Table(accessed_table) = resolved_accessors {
+                                accessed_table.table.as_ref().borrow_mut().insert(key, val_vec[val_counter].clone());
+                            }
                         }
+                        val_counter += 1;
                     }
                 } else {
                     return Err("Cannot assign to this".into());
@@ -260,7 +274,6 @@ impl Interpreter {
                 return Ok(());
             },
             Stmt::LocalAssignment(var, val) => {
-                println!("Evaluating local assignment");
                 let mut val_vec = vec![];
                 if let Expr::Exprlist(el) = val {
                     for e in el.into_iter() {
@@ -411,7 +424,8 @@ impl Interpreter {
                     Value::Nil => Value::Nil,
                     Value::String(s) => Value::String(s.clone()),
                     Value::Number(n) => Value::Number(*n),
-                    Value::FunctionDef(fd) => Value::FunctionDef(fd.clone())
+                    Value::FunctionDef(fd) => Value::FunctionDef(fd.clone()),
+                    Value::Table(ut) => Value::Table(ut.clone()),
                 }
             },
             Expr::Unary(e, op) => {
@@ -473,7 +487,10 @@ impl Interpreter {
                             res += &(s + "\t");
                         },
                         Value::FunctionDef(_) => {
-                            res += "<function>".into()
+                            res += "<function> \t".into()
+                        },
+                        Value::Table(_) => {
+                            res += "<table> \t".into()
                         }
                     }
                 }
@@ -501,6 +518,17 @@ impl Interpreter {
                     }
                 }
                 return Value::Nil;
+            },
+            Expr::Accessor(bt, ba) => {
+                if let Value::Table(ut) = self.eval_expr(bt.as_ref()) {
+                    let accessor = self.eval_expr(ba.as_ref());
+                    if let Some(accessed_value) = ut.table.as_ref().borrow().get(&accessor) {
+                        return accessed_value.clone();
+                    }
+                } else if let Expr::Accessor(_, _) = bt.as_ref() {
+                    return self.eval_expr(bt.as_ref());
+                }
+                Value::Nil
             }
         }
     }

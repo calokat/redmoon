@@ -1,4 +1,4 @@
-use crate::{Token, Expr, Stmt, function::Function, values::Value};
+use crate::{Token, Expr, Stmt, function::Function, values::Value, table::UserTable};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -22,11 +22,10 @@ impl Parser {
                 if !self.check_token_type(Token::RightParens) {
                     return Err("Missing right parens".into());
                 }
-                return Ok(expr);    
+                return Ok(expr);
             }
             return expr_res;
         } else if let Some(Token::Identifier(s)) = self.current_token() {
-            println!("Parser: Variable {s}");
             self.advance();
             if self.check_token_type(Token::LeftParens) {
                 if !self.check_token_type(Token::RightParens) {
@@ -35,7 +34,6 @@ impl Parser {
                         return Err("Function call is missing right parens".into());
                     }
                     if let Expr::Exprlist(args) = args {
-                        println!("Parsing call of function {s} with {} args", args.len());
                         return Ok(Expr::FunctionCall(Box::new(Expr::Var(s.clone())), args));
                     }
                 } else {
@@ -75,6 +73,28 @@ impl Parser {
         }
     }
 
+    fn accessor(&mut self) -> Result<Expr, String> {
+        let mut left = self.primary()?;
+        loop {
+            if self.check_token_type(Token::Period) {
+                let field = self.primary()?;
+                if let Expr::Var(name) = field {
+                    left = Expr::Accessor(Box::new(left), Box::new(Expr::Literal(Value::String(name))));
+                }
+            } else if self.check_token_type(Token::LeftSquareBracket) {
+                let right = self.expression()?;
+                left = Expr::Accessor(Box::new(left), Box::new(right));
+                if !self.check_token_type(Token::RightSquareBracket) {
+                    return Err("Missing right square bracket".into());
+                }
+            } else {
+                break;
+            }
+        }
+        return Ok(left);
+    }
+
+
     fn unary(&mut self) -> Result<Expr, String> {
         if self.check_token_type(Token::Minus) {
             let operator = self.previous_token();
@@ -84,7 +104,7 @@ impl Parser {
                 return Err("Unsupported unary operation".into())
             }
         }
-        return self.primary();
+        return self.accessor();
     }
 
     fn factor(&mut self) -> Result<Expr, String> {
@@ -156,8 +176,18 @@ impl Parser {
         return Ok(expr);
     }
 
-    fn expression(&mut self) -> Result<Expr, String> {
+    fn table(&mut self) -> Result<Expr, String> {
+        if self.check_token_type(Token::LeftCurlyBrace) {
+            if !self.check_token_type(Token::RightCurlyBrace) {
+                return Err("Table constructor missing right curly brace".into());
+            }
+            return Ok(Expr::Literal(Value::Table(UserTable::new())));
+        }
         return self.equality();
+    }
+
+    fn expression(&mut self) -> Result<Expr, String> {
+        return self.table();
     }
 
     fn expr_list(&mut self) -> Result<Expr, String> {
@@ -173,7 +203,6 @@ impl Parser {
             let func = self.function_def()?;
             if let Expr::Literal(Value::FunctionDef(fd)) = func {
                 if let Some(id_str) = fd.get_impl().name.clone() {
-                    println!("Assigning function value to var {id_str}");
                     return Ok(Stmt::Assignment(Expr::Exprlist(vec![Expr::Var(id_str)]), Expr::Exprlist(vec![Expr::Literal(Value::FunctionDef(fd))])));
                 } else {
                     return Err("Cannot assign to function without name".into());

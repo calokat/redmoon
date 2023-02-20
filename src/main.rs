@@ -6,6 +6,7 @@ mod interpreter;
 mod stmt;
 mod values;
 mod function;
+mod table;
 
 use std::io;
 use interpreter::Interpreter;

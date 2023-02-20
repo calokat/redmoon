@@ -98,11 +98,25 @@ impl<'a> Lexer<'a> {
                         if self.current_char() == '.' {
                             panic!("Varargs are coming soon!");
                         } else {
-                            println!("adding concat token");
                             ret.push(Token::Concatenation);
                         }
+                    } else {
+                        ret.push(Token::Period);
+                        self.advance();
                     }
                 }
+            } else if c == '{' {
+                ret.push(Token::LeftCurlyBrace);
+                self.advance();
+            } else if c == '}' {
+                ret.push(Token::RightCurlyBrace);
+                self.advance();
+            } else if c == '[' {
+                ret.push(Token::LeftSquareBracket);
+                self.advance();
+            } else if c == ']' {
+                ret.push(Token::RightSquareBracket);
+                self.advance();
             } else {
                 panic!("Cannot lex current sequence");
             }
@@ -154,9 +168,7 @@ impl<'a> Lexer<'a> {
                 _ => RESERVED_WORDS_TOKENS[r_idx].clone()
             }
         }
-
-            println!("{}", &self.expr_str[scan_start..self.current]);
-            return Token::Identifier(self.expr_str[scan_start..self.current].into());
+        return Token::Identifier(self.expr_str[scan_start..self.current].into());
     }
 
     fn lex_operator(&mut self, c: char) -> Token {

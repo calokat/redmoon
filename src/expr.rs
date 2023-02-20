@@ -7,5 +7,6 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Var(String),
     Exprlist(Vec<Expr>),
-    FunctionCall(Box<Expr>, Vec<Expr>)
+    FunctionCall(Box<Expr>, Vec<Expr>),
+    Accessor(Box<Expr> /* Table being accessed */, Box<Expr> /* Expr that is accessing */)
 }

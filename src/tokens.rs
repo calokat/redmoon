@@ -41,4 +41,9 @@ pub enum Token {
     Elseif,
     For,
     In,
+    LeftCurlyBrace,
+    RightCurlyBrace,
+    Period,
+    LeftSquareBracket,
+    RightSquareBracket,
 }
