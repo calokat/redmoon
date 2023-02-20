@@ -118,6 +118,24 @@ impl<'a> Lexer<'a> {
                 ret.push(Token::RightCurlyBrace);
                 self.advance();
             } else if c == '[' {
+                if self.peek_next_char() == Some('[') {
+                    self.advance();
+                    self.advance();
+                    ret.push(self.lex_long_string(0));
+                    continue;
+                } else if self.peek_next_char() == Some('=') {
+                    let mut level = 1;
+                    self.advance();
+                    self.advance();
+                    while self.current_char() == '=' {
+                        level += 1;
+                        self.advance();
+                    }
+                    assert!(self.current_char() == '[', "Ill-formed long string");
+                    self.advance();
+                    ret.push(self.lex_long_string(level));
+                    continue;
+                }
                 ret.push(Token::LeftSquareBracket);
                 self.advance();
             } else if c == ']' {
@@ -128,6 +146,31 @@ impl<'a> Lexer<'a> {
             }
         }
         return ret;
+    }
+
+    fn lex_long_string(&mut self, level: usize) -> Token {
+        println!("level is {level}");
+        let scan_start = self.current;
+        while !self.at_eof() {
+            while self.current_char() != ']' && self.current < self.expr_str.len() {
+                self.advance();
+            }
+            if self.at_eof() {
+                panic!("Ill formed long string");
+            }
+            let mut closing_level: usize = 0;
+            self.advance();
+            while self.current_char() == '=' && closing_level < level {
+                closing_level += 1;
+                self.advance();
+            }
+            if self.current_char() == ']' && level == closing_level {
+                let ret = Token::Literal(Value::String(self.expr_str[scan_start..self.current - (1 + closing_level)].into()));
+                self.advance();
+                return ret;
+            }
+        }
+        panic!("Ill formed long string");
     }
 
     fn lex_string(&mut self) -> Token {
@@ -228,7 +271,7 @@ impl<'a> Lexer<'a> {
         if self.current < self.expr_str.len() {
             self.current += 1;
         } else {
-            println!("Lexer internal error: reading past end of buffer");
+            panic!("Lexer internal error: reading past end of buffer");
         }
     } 
 
