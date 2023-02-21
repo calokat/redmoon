@@ -202,7 +202,7 @@ impl Parser {
         if self.current_token() == Some(Token::Function) {
             let func = self.function_def()?;
             if let Expr::Literal(Value::FunctionDef(fd)) = func {
-                if let Some(id_str) = fd.get_impl().name.clone() {
+                if let Some(id_str) = fd.get_name() {
                     return Ok(Stmt::Assignment(Expr::Exprlist(vec![Expr::Var(id_str)]), Expr::Exprlist(vec![Expr::Literal(Value::FunctionDef(fd))])));
                 } else {
                     return Err("Cannot assign to function without name".into());

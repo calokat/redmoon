@@ -1,5 +1,5 @@
-use crate::{Token, Expr, Stmt, Value, table::{Table, UserTable}};
-use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}};
+use crate::{Token, Expr, Stmt, Value, table::{Table}};
+use std::{collections::{VecDeque}, borrow::{BorrowMut}};
 
 
 pub struct Interpreter {
@@ -496,18 +496,35 @@ impl Interpreter {
                 }
                 return Value::String(res);
             },
-            Expr::FunctionCall(func_id, _vars) => {
+            Expr::FunctionCall(func_id, vars) => {
                 println!("Return statements coming soon");
                 if let Expr::Var(func_id) = &**func_id {
-                    let func_val = self.find_var(func_id);
+                    let func_val = self.find_var(func_id);                    
                     match func_val {
                         Some(v) => {
-                            match v {
+                            match v.clone() {
                                 Value::FunctionDef(fd) => {
-                                    if let Err(s) = self.eval_stmt(&*fd.get_impl().body.clone()) {
-                                        println!("{s}");
-                                        return Value::Nil;
+                                    let mut args_decls: Vec<Stmt> = vec![];
+                                    let mut arg_counter = 0;
+                                    for param in fd.get_params() {
+                                        if let Some(arg) = vars.get(arg_counter) {
+                                            args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![arg.clone()])));
+                                        } else {
+                                            args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(Value::Nil)])));
+                                        }
+                                        arg_counter += 1;
                                     }
+                                    let func_body = fd.get_body();
+                                    self.push_env();
+                                    for decl in args_decls.into_iter() {
+                                        if let Err(e) = self.eval_stmt(&decl) {
+                                            panic!("Error declaring args: {e}");
+                                        }
+                                    }
+                                    if let Err(func_body_err) = self.eval_stmt(func_body) {
+                                        println!("{func_body_err}");
+                                    }
+                                    self.pop_env();
                                 }
                                 _ => {
 

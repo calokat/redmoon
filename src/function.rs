@@ -22,8 +22,16 @@ impl Function {
         Self { fi: Rc::new(FunctionImpl::new(body, params, name)) }
     }
 
-    pub fn get_impl(&self) -> &FunctionImpl {
-        self.fi.borrow()
+    pub fn get_name(&self) -> Option<String> {
+        self.fi.as_ref().name.clone()
+    }
+
+    pub fn get_params(&self) -> &Vec<Expr> {
+        self.fi.params.borrow()
+    }
+
+    pub fn get_body(&self) -> &Stmt {
+        &self.fi.body
     }
 }
 
