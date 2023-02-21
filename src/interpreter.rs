@@ -31,7 +31,7 @@ impl Interpreter {
 
     fn find_var(&self, name: &String) -> Option<&Value> {
         let val_key = Value::String(name.clone());
-        for t in self.stack.iter() {
+        for t in self.stack.iter().rev() {
             if let Some(ret) = t.get(&val_key) {
                 return Some(ret);
             }
@@ -167,6 +167,9 @@ impl Interpreter {
                     Value::Table(ut2) => Value::Boolean(ut1 == ut2),
                     _ => Value::Boolean(false)
                 }
+            },
+            Value::ValList(_list) => {
+                panic!("Cannot compare value lists to each other");
             }
         }
     }
@@ -208,37 +211,41 @@ impl Interpreter {
         }
     }
 
-    pub fn eval_stmt(&mut self, s: &Stmt) -> Result<(), String> {
+    pub fn eval_stmt(&mut self, s: &Stmt) -> Result<Option<Expr>, String> {
         match s {
             Stmt::Empty => {
-                return Ok(());
+                return Ok(None);
             },
             Stmt::ExprStmt(e) => {
                 let v = self.eval_expr(&e);
                 match v {
                     Value::Boolean(b) => {
                         println!("{}", b);
-                        return Ok(());
+                        return Ok(None);
                     },
                     Value::Nil => {
                         println!("Nil");
-                        return Ok(());
+                        return Ok(None);
                     },
                     Value::Number(n) => {
                         println!("{}", n);
-                        return Ok(());
+                        return Ok(None);
                     },
                     Value::String(s) => {
                         println!("{}", s);
-                        return Ok(());
+                        return Ok(None);
                     },
                     Value::FunctionDef(_fd) => {
                         println!("Function definition");
-                        return Ok(());
+                        return Ok(None);
                     },
                     Value::Table(_ut) => {
                         println!("Table!");
-                        return Ok(())
+                        return Ok(None)
+                    },
+                    Value::ValList(_list) => {
+                        println!("<value list>");
+                        return Ok(None);
                     }
                 }
             },
@@ -246,7 +253,14 @@ impl Interpreter {
                 let mut val_vec = vec![];
                 if let Expr::Exprlist(el) = val {
                     for e in el.into_iter() {
-                        val_vec.push(self.eval_expr(&e));
+                        let e_res = self.eval_expr(&e);
+                        if let Value::ValList(vl) = e_res {
+                            for v in vl.into_iter() {
+                                val_vec.push(v);
+                            }
+                        } else {
+                            val_vec.push(e_res);
+                        }
                     }
                 }
                 if let Expr::Exprlist(var_list) = var {
@@ -259,7 +273,6 @@ impl Interpreter {
                                 self._G.insert(Value::String(var_name.clone()), Value::Nil);
                             }
                         } else if let Expr::Accessor(accessors, field) = var {
-                            println!("Hello darkness");
                             let key = self.eval_expr(field.as_ref());
                             let resolved_accessors = self.eval_expr(accessors.as_ref());
                             if let Value::Table(accessed_table) = resolved_accessors {
@@ -271,7 +284,7 @@ impl Interpreter {
                 } else {
                     return Err("Cannot assign to this".into());
                 }
-                return Ok(());
+                return Ok(None);
             },
             Stmt::LocalAssignment(var, val) => {
                 let mut val_vec = vec![];
@@ -297,26 +310,33 @@ impl Interpreter {
                 } else {
                     return Err("Cannot assign to this".into());
                 }
-                return Ok(());
+                return Ok(None);
 
             }
             Stmt::Block(stmts) => {
-                self.push_env();
                 for s in stmts {
-                   if let Err(err) = self.eval_stmt(s) {
+                    let res = self.eval_stmt(s);
+                   if let Err(err) = res {
                     return Err(err);
+                   } else if let Ok(None) = res {
+                        continue;
+                   } else {
+                    return res;
                    }
                 }
-                self.pop_env();
-                Ok(())
+                Ok(None)
             },
             Stmt::IfStmt(cond, body) => {
                 let cond_res = self.eval_expr(&cond);
-                let mut eval_res = Ok(());
+                let mut eval_res = Ok(None);
                 if self.is_truthy(cond_res) {
                     self.push_env();
                     eval_res = self.eval_stmt(&*body);
                     self.pop_env();
+                    if let Ok(None) = eval_res {
+                    } else if let Ok(Some(ret)) = eval_res {
+                        return Ok(Some(ret));
+                    }
                 }
                 eval_res
             },
@@ -325,21 +345,34 @@ impl Interpreter {
                     let cond_res = self.eval_expr(&cond);
                     if self.is_truthy(cond_res) {
                         self.push_env();
-                        if let Err(s) = self.eval_stmt(&*body) {
+                        let res = self.eval_stmt(&*body);
+                        if let Err(s) = res {
+                            self.pop_env();
                             return Err(s);
+                        } else if let Ok(None) = res {
+                            // Do nothing
+                        } else if let Ok(Some(ret)) = res {
+
+                            self.pop_env();
+                            return Ok(Some(ret));
                         }
                         self.pop_env();
                     } else {
                         break;
                     }
                 }
-                Ok(())
+                Ok(None)
             },
             Stmt::RepeatUntilLoop(body, cond) => {
                 loop {
                     self.push_env();
-                    if let Err(s) = self.eval_stmt(&*body) {
+                    let stmt_res = self.eval_stmt(&*body);
+                    if let Err(s) = stmt_res {
                         return Err(s);
+                    } else if let Ok(None) = stmt_res {
+                        // Do nothing
+                    } else if let Ok(Some(ret)) = stmt_res {
+                        return Ok(Some(ret));
                     }
                     let cond_res = self.eval_expr(cond);
                     if self.is_truthy(cond_res) {
@@ -348,7 +381,10 @@ impl Interpreter {
                     }
                     self.pop_env();
                 }
-                Ok(())
+                Ok(None)
+            },
+            Stmt::Return(ret) => {
+                Ok(Some(ret.clone()))
             }
         }
     }
@@ -419,14 +455,7 @@ impl Interpreter {
                 }
             },
             Expr::Literal(t) => {
-                match t {
-                    Value::Boolean(b) => Value::Boolean(*b),
-                    Value::Nil => Value::Nil,
-                    Value::String(s) => Value::String(s.clone()),
-                    Value::Number(n) => Value::Number(*n),
-                    Value::FunctionDef(fd) => Value::FunctionDef(fd.clone()),
-                    Value::Table(ut) => Value::Table(ut.clone()),
-                }
+                t.clone()
             },
             Expr::Unary(e, op) => {
                 if op == &Token::Minus {
@@ -465,41 +494,20 @@ impl Interpreter {
                 Value::Nil
             },
             Expr::Exprlist(el) => {
-                let mut res = String::new();
-                for e in el {
-                    let e_res = self.eval_expr(e);
-                    match e_res {
-                        Value::Boolean(b) => {
-                            if b  {
-                                res += "True\t";
-                            } else {
-                                res += "False\t";
-                            }
-                        },
-                        Value::Nil => {
-                            res += "Nil\t"
-                        },
-                        Value::Number(n) => {
-                            let n = n.0;
-                            res += format!("{n}\t").as_str();
-                        },
-                        Value::String(s) => {
-                            res += &(s + "\t");
-                        },
-                        Value::FunctionDef(_) => {
-                            res += "<function> \t".into()
-                        },
-                        Value::Table(_) => {
-                            res += "<table> \t".into()
-                        }
+                if el.len() == 1 {
+                    if let Some(e) = el.get(0) {
+                        return self.eval_expr(e);
                     }
                 }
-                return Value::String(res);
+                let mut values: Vec<Value> = vec![];
+                for e in el.iter() {
+                    values.push(self.eval_expr(e));
+                }
+                return Value::ValList(values);
             },
             Expr::FunctionCall(func_id, vars) => {
-                println!("Return statements coming soon");
                 if let Expr::Var(func_id) = &**func_id {
-                    let func_val = self.find_var(func_id);                    
+                    let func_val = self.find_var(func_id);
                     match func_val {
                         Some(v) => {
                             match v.clone() {
@@ -521,8 +529,15 @@ impl Interpreter {
                                             panic!("Error declaring args: {e}");
                                         }
                                     }
-                                    if let Err(func_body_err) = self.eval_stmt(func_body) {
+                                    let func_eval = self.eval_stmt(func_body);
+                                    if let Err(func_body_err) = func_eval {
                                         println!("{func_body_err}");
+                                    } else if let Ok(None) = func_eval {
+                                        // Do nothing
+                                    } else if let Ok(Some(func_ret)) = func_eval {
+                                        let ret_val = self.eval_expr(&func_ret);
+                                        self.pop_env();
+                                        return ret_val;
                                     }
                                     self.pop_env();
                                 }

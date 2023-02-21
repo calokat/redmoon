@@ -271,6 +271,8 @@ impl Parser {
             let body = self.repeat_body()?;
             let cond = self.expression()?;
             return Ok(Stmt::RepeatUntilLoop(Box::new(body), cond));
+        } else if self.check_token_type(Token::Return) {
+            return Ok(Stmt::Return(self.expr_list()?));
         }
         return self.assignment();
     }
