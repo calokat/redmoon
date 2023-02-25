@@ -326,7 +326,7 @@ impl Interpreter {
                 }
                 Ok(None)
             },
-            Stmt::IfStmt(cond, body) => {
+            Stmt::IfStmt(cond, body, _else) => {
                 let cond_res = self.eval_expr(&cond);
                 let mut eval_res = Ok(None);
                 if self.is_truthy(cond_res) {
@@ -334,6 +334,16 @@ impl Interpreter {
                     eval_res = self.eval_stmt(&*body);
                     self.pop_env();
                     if let Ok(None) = eval_res {
+                        // do nothing
+                    } else if let Ok(Some(ret)) = eval_res {
+                        return Ok(Some(ret));
+                    }
+                } else {
+                    self.push_env();
+                    eval_res = self.eval_stmt(_else);
+                    self.pop_env();
+                    if let Ok(None) = eval_res {
+                        // do nothing
                     } else if let Ok(Some(ret)) = eval_res {
                         return Ok(Some(ret));
                     }

@@ -249,6 +249,24 @@ impl Parser {
         Ok(Stmt::Block(body))
     }
 
+    fn if_statement(&mut self) -> Result<Stmt, String> {
+        let cond = self.expression()?;
+        assert!(self.check_token_type(Token::Then), "If statement missing \"then\" keyword");
+        let mut stmts: Vec<Stmt> = vec![];
+        while !self.check_token_type(Token::Else) && !self.check_token_type(Token::Elseif) && !self.check_token_type(Token::End) && self.current < self.tokens.len() {
+            stmts.push(self.statement()?);
+        }
+        if self.previous_token() == Token::Else {
+            println!("Evaluating else");
+            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(Stmt::Block(self.do_block()?))));
+        } else if self.previous_token() == Token::Elseif {
+            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(self.if_statement()?)));
+        } else {
+            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(Stmt::Empty)));
+        }
+
+    }
+
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.check_token_type(Token::Semicolon) {
             return Ok(Stmt::Empty);
@@ -258,10 +276,7 @@ impl Parser {
         } else if self.check_token_type(Token::Local) {
             return self.local_assignment();
         } else if self.check_token_type(Token::If) {
-            let cond = self.expression()?;
-            assert!(self.check_token_type(Token::Then), "If statement missing \"then\" keyword");
-            let body = self.do_block()?;
-            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(body))));
+            return self.if_statement();
         } else if self.check_token_type(Token::While) {
             let cond = self.expression()?;
             assert!(self.check_token_type(Token::Do), "while loop missing \"do\" keyword");
