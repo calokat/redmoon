@@ -70,8 +70,11 @@ impl<'a> Lexer<'a> {
                 ret.push(self.lex_number());
             } else if self.is_operator(c) {
                 if self.peek_next_char() == Some('-') {
-                    while self.current_char() != '\n' {
+                    while self.current_char() != '\n' && !self.at_eof() {
                         self.advance();
+                    }
+                    if self.at_eof() {
+                        return ret;
                     }
                     continue;
                 }
@@ -149,7 +152,6 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_long_string(&mut self, level: usize) -> Token {
-        println!("level is {level}");
         let scan_start = self.current;
         while !self.at_eof() {
             while self.current_char() != ']' && self.current < self.expr_str.len() {
