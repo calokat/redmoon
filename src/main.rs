@@ -7,6 +7,7 @@ mod stmt;
 mod values;
 mod function;
 mod table;
+mod native_function;
 
 use std::io;
 use interpreter::Interpreter;

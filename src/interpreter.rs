@@ -1,4 +1,4 @@
-use crate::{Token, Expr, Stmt, Value, table::{Table}};
+use crate::{Token, Expr, Stmt, Value, table::{Table}, native_function::NativeFunction};
 use std::{collections::{VecDeque}, borrow::{BorrowMut}};
 
 
@@ -9,7 +9,15 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self { _G: Table::new(), stack: VecDeque::new() }
+        let print = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
+            if let Some(Value::String(s)) = args.get(0) {
+                println!("Native print: {s}");
+            }
+            None
+        })));
+        let mut _G = Table::new();
+        _G.insert(Value::String("print".into()), print);
+        Self { _G, stack: VecDeque::new() }
     }
 
     fn push_env(&mut self) {
@@ -162,6 +170,12 @@ impl Interpreter {
                     _ => Value::Boolean(false)
                 }
             },
+            Value::NativeFunctionDef(nf1) => {
+                match t2 {
+                    Value::NativeFunctionDef(nf2) => Value::Boolean(nf1 == nf2),
+                    _ => Value::Boolean(false)
+                }
+            }
             Value::Table(ut1) => {
                 match t2 {
                     Value::Table(ut2) => Value::Boolean(ut1 == ut2),
@@ -236,11 +250,15 @@ impl Interpreter {
                         return Ok(None);
                     },
                     Value::FunctionDef(_fd) => {
-                        println!("Function definition");
+                        println!("<function definition>");
                         return Ok(None);
                     },
+                    Value::NativeFunctionDef(_) => {
+                        println!("<native function definition>");
+                        return Ok(None);
+                    }
                     Value::Table(_ut) => {
-                        println!("Table!");
+                        println!("<table>");
                         return Ok(None)
                     },
                     Value::ValList(_list) => {
@@ -564,9 +582,19 @@ impl Interpreter {
                                         return ret_val;
                                     }
                                     self.pop_env();
-                                }
+                                },
+                                Value::NativeFunctionDef(nf) => {
+                                    let mut args: Vec<Value> = vec![];
+                                    for p in vars.iter() {
+                                        args.push(self.eval_expr(p));
+                                    }
+                                    let func_eval = nf.call(self, &mut args);
+                                    if let Some(ret_val) = func_eval {
+                                        return ret_val;
+                                    }
+                                },
                                 _ => {
-
+                                    
                                 }
                             }
                         },
