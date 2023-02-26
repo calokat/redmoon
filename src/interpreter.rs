@@ -202,11 +202,11 @@ impl Interpreter {
         }
     }
 
-    fn is_truthy(&self, v: Value) -> bool {
+    fn is_truthy(&self, v: &Value) -> bool {
         match v {
             Value::String(s) => !s.is_empty(),
             Value::Nil => false,
-            Value::Boolean(b) => b,
+            Value::Boolean(b) => b.clone(),
             _ => true
         }
     }
@@ -329,7 +329,7 @@ impl Interpreter {
             Stmt::IfStmt(cond, body, _else) => {
                 let cond_res = self.eval_expr(&cond);
                 let mut eval_res = Ok(None);
-                if self.is_truthy(cond_res) {
+                if self.is_truthy(&cond_res) {
                     self.push_env();
                     eval_res = self.eval_stmt(&*body);
                     self.pop_env();
@@ -353,7 +353,7 @@ impl Interpreter {
             Stmt::WhileLoop(cond, body) => {
                 loop {
                     let cond_res = self.eval_expr(&cond);
-                    if self.is_truthy(cond_res) {
+                    if self.is_truthy(&cond_res) {
                         self.push_env();
                         let res = self.eval_stmt(&*body);
                         if let Err(s) = res {
@@ -385,7 +385,7 @@ impl Interpreter {
                         return Ok(Some(ret));
                     }
                     let cond_res = self.eval_expr(cond);
-                    if self.is_truthy(cond_res) {
+                    if self.is_truthy(&cond_res) {
                         self.pop_env();
                         break;
                     }
@@ -460,6 +460,20 @@ impl Interpreter {
                             }
                         }
                         panic!("Cannot concatenate");
+                    },
+                    Token::And => {
+                        let v1 = self.eval_expr(&*o1);
+                        if !self.is_truthy(&v1) {
+                            return v1;
+                        }
+                        return self.eval_expr(&*o2);
+                    },
+                    Token::Or => {
+                        let v1 = self.eval_expr(&*o1);
+                        if self.is_truthy(&v1) {
+                            return v1;
+                        }
+                        return self.eval_expr(&*o2);
                     }
                     _ => panic!("Operator not supported yet")
                 }

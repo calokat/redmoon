@@ -186,8 +186,25 @@ impl Parser {
         return self.equality();
     }
 
+    fn and(&mut self) -> Result<Expr, String> {
+        let mut expr = self.table()?;
+        while self.check_token_type(Token::And) {
+            expr = Expr::Binary(Box::new(expr), Token::And, Box::new(self.or()?));
+        }
+        return Ok(expr);
+    }
+
+    fn or(&mut self) -> Result<Expr, String> {
+        let mut expr = self.and()?;
+        while self.check_token_type(Token::Or) {
+            expr = Expr::Binary(Box::new(expr), Token::Or, Box::new(self.table()?));
+        }
+        return Ok(expr);
+    }
+
+
     fn expression(&mut self) -> Result<Expr, String> {
-        return self.table();
+        return self.or();
     }
 
     fn expr_list(&mut self) -> Result<Expr, String> {
