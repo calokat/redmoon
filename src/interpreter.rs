@@ -10,8 +10,8 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         let print = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
-            if let Some(Value::String(s)) = args.get(0) {
-                println!("Native print: {s}");
+            if let Some(v) = args.get(0) {
+                println!("Native print: {v}");
             }
             None
         })));
@@ -245,41 +245,8 @@ impl Interpreter {
                 return Ok(None);
             },
             Stmt::ExprStmt(e) => {
-                let v = self.eval_expr(&e);
-                match v {
-                    Value::Boolean(b) => {
-                        println!("{}", b);
-                        return Ok(None);
-                    },
-                    Value::Nil => {
-                        println!("Nil");
-                        return Ok(None);
-                    },
-                    Value::Number(n) => {
-                        println!("{}", n);
-                        return Ok(None);
-                    },
-                    Value::String(s) => {
-                        println!("{}", s);
-                        return Ok(None);
-                    },
-                    Value::FunctionDef(_fd) => {
-                        println!("<function definition>");
-                        return Ok(None);
-                    },
-                    Value::NativeFunctionDef(_) => {
-                        println!("<native function definition>");
-                        return Ok(None);
-                    }
-                    Value::Table(_ut) => {
-                        println!("<table>");
-                        return Ok(None)
-                    },
-                    Value::ValList(_list) => {
-                        println!("<value list>");
-                        return Ok(None);
-                    }
-                }
+                self.eval_expr(&e);
+                Ok(None)
             },
             Stmt::Assignment(var, val) => {
                 let mut val_vec = vec![];
