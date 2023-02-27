@@ -289,7 +289,7 @@ impl Parser {
             return Ok(Stmt::Empty);
         } else if self.check_token_type(Token::Do) {
             let res = self.do_block()?;
-            return Ok(Stmt::Block(res));
+            return Ok(Stmt::DoBlock(res));
         } else if self.check_token_type(Token::Local) {
             return self.local_assignment();
         } else if self.check_token_type(Token::If) {

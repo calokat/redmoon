@@ -225,6 +225,20 @@ impl Interpreter {
         }
     }
 
+    fn eval_block(&mut self, stmts: &Vec<Stmt>) -> Result<Option<Expr>, String> {
+        for s in stmts {
+            let res = self.eval_stmt(s);
+           if let Err(err) = res {
+            return Err(err);
+           } else if let Ok(None) = res {
+                continue;
+           } else {
+            return res;
+           }
+        }
+        Ok(None)
+    }
+
     pub fn eval_stmt(&mut self, s: &Stmt) -> Result<Option<Expr>, String> {
         match s {
             Stmt::Empty => {
@@ -285,10 +299,11 @@ impl Interpreter {
                     let mut val_counter = 0;
                     for var in var_list.iter() {
                         if let Expr::Var(var_name) = var {
+                            let t = self.stack.iter_mut().find(|entry| {entry.get(&Value::String(var_name.to_string())) != None}).unwrap_or_else(|| &mut self._G);
                             if let Some(val) = val_vec.get(val_counter) {
-                                self._G.insert(Value::String(var_name.clone()), val.clone());
+                                t.insert(Value::String(var_name.clone()), val.clone());
                             } else {
-                                self._G.insert(Value::String(var_name.clone()), Value::Nil);
+                                t.insert(Value::String(var_name.clone()), Value::Nil);
                             }
                         } else if let Expr::Accessor(accessors, field) = var {
                             let key = self.eval_expr(field.as_ref());
@@ -332,18 +347,23 @@ impl Interpreter {
 
             }
             Stmt::Block(stmts) => {
-                for s in stmts {
-                    let res = self.eval_stmt(s);
-                   if let Err(err) = res {
-                    return Err(err);
-                   } else if let Ok(None) = res {
-                        continue;
-                   } else {
-                    return res;
-                   }
-                }
-                Ok(None)
+                return self.eval_block(stmts);
             },
+            Stmt::DoBlock(stmts) => {
+                self.push_env();
+                let eval_res = self.eval_block(stmts);
+                if let Ok(Some(expr)) = eval_res {
+                    let literal = self.eval_expr(&expr);
+                    self.pop_env();
+                    return Ok(Some(Expr::Literal(literal)));
+                } else if let Err(_) = eval_res {
+                    self.pop_env();
+                    return eval_res;
+                } else {
+                    self.pop_env();
+                    Ok(None)
+                }
+            }
             Stmt::IfStmt(cond, body, _else) => {
                 let cond_res = self.eval_expr(&cond);
                 let mut eval_res = Ok(None);
@@ -588,7 +608,9 @@ impl Interpreter {
                                     for p in vars.iter() {
                                         args.push(self.eval_expr(p));
                                     }
+                                    self.push_env();
                                     let func_eval = nf.call(self, &mut args);
+                                    self.pop_env();
                                     if let Some(ret_val) = func_eval {
                                         return ret_val;
                                     }
