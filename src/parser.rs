@@ -102,7 +102,7 @@ impl Parser {
 
 
     fn unary(&mut self) -> Result<Expr, String> {
-        if self.check_token_type(Token::Minus) {
+        if self.check_token_type(Token::Minus) || self.check_token_type(Token::Not) {
             let operator = self.previous_token();
             if let Ok(right) = self.unary() {
                 return Ok(Expr::Unary(Box::new(right), operator));
@@ -309,7 +309,6 @@ impl Parser {
             stmts.push(self.statement()?);
         }
         if self.previous_token() == Token::Else {
-            println!("Evaluating else");
             return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(Stmt::Block(self.do_block()?))));
         } else if self.previous_token() == Token::Elseif {
             return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(self.if_statement()?)));

@@ -528,6 +528,9 @@ impl Interpreter {
                     } else {
                         panic!("Cannot negate this");
                     }
+                } else if op == &Token::Not {
+                    let to_not = &self.eval_expr(e);
+                    return Value::Boolean(!self.is_truthy(to_not)); 
                 } else {
                     panic!("Unsupported unary operation");
                 }
