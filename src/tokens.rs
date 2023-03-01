@@ -46,4 +46,5 @@ pub enum Token {
     Period,
     LeftSquareBracket,
     RightSquareBracket,
+    Pound,
 }

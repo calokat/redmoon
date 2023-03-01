@@ -144,6 +144,9 @@ impl<'a> Lexer<'a> {
             } else if c == ']' {
                 ret.push(Token::RightSquareBracket);
                 self.advance();
+            } else if c == '#' {
+                ret.push(Token::Pound);
+                self.advance();
             } else {
                 panic!("Cannot lex current sequence");
             }

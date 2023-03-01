@@ -137,6 +137,16 @@ impl Interpreter {
             panic!("Comparison only applies to numbers");
         }
     }
+
+    fn value_length(v: &Value) -> Option<Value> {
+        match v {
+            Value::String(s) => {
+                Some(Value::Number(ordered_float::OrderedFloat(s.len() as f32)))
+            },
+            // TODO: Add support for table lengths
+            _ => None
+        }
+    }
     
     fn equals(t1: Value, t2: Value) -> Value {
         if let Value::Interrupt = t2 {
@@ -531,6 +541,8 @@ impl Interpreter {
                 } else if op == &Token::Not {
                     let to_not = &self.eval_expr(e);
                     return Value::Boolean(!self.is_truthy(to_not)); 
+                } else if op == &Token::Pound {
+                    return Self::value_length(&self.eval_expr(e)).unwrap_or_else(|| Value::Nil);
                 } else {
                     panic!("Unsupported unary operation");
                 }

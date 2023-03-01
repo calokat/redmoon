@@ -102,7 +102,7 @@ impl Parser {
 
 
     fn unary(&mut self) -> Result<Expr, String> {
-        if self.check_token_type(Token::Minus) || self.check_token_type(Token::Not) {
+        if self.check_token_type(Token::Minus) || self.check_token_type(Token::Not) || self.check_token_type(Token::Pound) {
             let operator = self.previous_token();
             if let Ok(right) = self.unary() {
                 return Ok(Expr::Unary(Box::new(right), operator));
