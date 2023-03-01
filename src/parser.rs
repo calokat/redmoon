@@ -81,11 +81,18 @@ impl Parser {
                         return Err("Function call is missing right parens".into());
                     }
                     if let Expr::Exprlist(args) = args {
-                        return Ok(Expr::FunctionCall(Box::new(left), args));
+                        left = Expr::FunctionCall(Box::new(left), args);
                     }
                 } else {
-                    return Ok(Expr::FunctionCall(Box::new(left), vec![]));
+                    left = Expr::FunctionCall(Box::new(left), vec![]);
                 }
+            } else if let Some(Token::Literal(v)) = self.current_token() {
+                self.advance();
+                if let Value::String(_) = v {
+                    left = Expr::FunctionCall(Box::new(left), vec![Expr::Literal(v)]);
+                }
+            } else if self.check_token_type(Token::LeftCurlyBrace) {
+                left = Expr::FunctionCall(Box::new(left), vec![self.field_list()?]);
             } else {
                 break;
             }
