@@ -1,6 +1,7 @@
 use crate::Expr;
 #[derive(Clone)]
 pub enum Stmt {
+    Break,
     Empty,
     ExprStmt(Expr),
     Assignment(Expr, Expr),
@@ -11,4 +12,6 @@ pub enum Stmt {
     WhileLoop(Expr, /* conditional */ Box<Stmt> /* body */),
     RepeatUntilLoop(Box<Stmt>, Expr),
     Return(Expr),
+    // Implementation detail, not visible to users
+    Chunk(Vec<Stmt>),
 }

@@ -340,6 +340,8 @@ impl Parser {
             return Ok(Stmt::RepeatUntilLoop(Box::new(body), cond));
         } else if self.check_token_type(Token::Return) {
             return Ok(Stmt::Return(self.expr_list()?));
+        } else if self.check_token_type(Token::Break) {
+            return Ok(Stmt::Break);
         }
         return self.assignment();
     }
@@ -353,12 +355,12 @@ impl Parser {
         Ok(res)
     }
 
-    pub fn chunk(&mut self) -> Result<Vec<Stmt>, String> {
+    pub fn chunk(&mut self) -> Result<Stmt, String> {
         if self.tokens.len() == 0 {
             return Err("No valid tokens".into());
         }
 
-        return Ok(self.block()?);
+        return Ok(Stmt::Chunk(self.block()?));
     }
 
     fn current_token(&self) -> Option<Token> {

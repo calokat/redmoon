@@ -12,7 +12,10 @@ pub enum Value {
     Nil,
     FunctionDef(Function),
     NativeFunctionDef(NativeFunction),
-    Table(UserTable)
+    Table(UserTable),
+    // Used when interpreting break statements. Can only be created by the runtime, not the user
+    Interrupt,
+
 }
 
 impl Display for Value {
@@ -32,7 +35,8 @@ impl Display for Value {
                     }
                 }
                 std::fmt::Result::Ok(())
-            }
+            },
+            Value::Interrupt => panic!("Unprintable value")
         }
     }
 }

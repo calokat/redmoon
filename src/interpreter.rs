@@ -139,6 +139,9 @@ impl Interpreter {
     }
     
     fn equals(t1: Value, t2: Value) -> Value {
+        if let Value::Interrupt = t2 {
+            panic!("Impossible value");
+        }
         match t1 {
             Value::Number(n1) => {
                 match t2 {
@@ -184,6 +187,9 @@ impl Interpreter {
             },
             Value::ValList(_list) => {
                 panic!("Cannot compare value lists to each other");
+            }, 
+            Value::Interrupt => {
+                panic!("Impossible value");
             }
         }
     }
@@ -367,7 +373,9 @@ impl Interpreter {
                         } else if let Ok(None) = res {
                             // Do nothing
                         } else if let Ok(Some(ret)) = res {
-
+                            if let Expr::Literal(Value::Interrupt) = ret {
+                                break;
+                            }
                             self.pop_env();
                             return Ok(Some(ret));
                         }
@@ -386,6 +394,8 @@ impl Interpreter {
                         return Err(s);
                     } else if let Ok(None) = stmt_res {
                         // Do nothing
+                    } else if let Ok(Some(Expr::Literal(Value::Interrupt))) = stmt_res {
+                        break;
                     } else if let Ok(Some(ret)) = stmt_res {
                         return Ok(Some(ret));
                     }
@@ -400,6 +410,20 @@ impl Interpreter {
             },
             Stmt::Return(ret) => {
                 Ok(Some(ret.clone()))
+            },
+            Stmt::Break => Ok(Some(Expr::Literal(Value::Interrupt))),
+            Stmt::Chunk(stmts) => {
+                for s in stmts.iter() {
+                    let res = self.eval_stmt(s);
+                    if !res.is_ok() {
+                        return res;
+                    } else if let Ok(Some(e)) = res {
+                        if let Expr::Literal(Value::Interrupt) = e {
+                            return Err("Break outside loop".into());
+                        }
+                    }
+                }
+                Ok(None)
             }
         }
     }
@@ -561,6 +585,9 @@ impl Interpreter {
                             } else if let Ok(None) = func_eval {
                                 // Do nothing
                             } else if let Ok(Some(func_ret)) = func_eval {
+                                if let Expr::Literal(Value::Interrupt) = func_ret {
+                                    panic!("Break outside loop");
+                                }
                                 let ret_val = self.eval_expr(&func_ret);
                                 self.pop_env();
                                 return ret_val;
@@ -601,7 +628,7 @@ impl Interpreter {
                     user_table.table.as_ref().borrow_mut().insert(self.eval_expr(&*key), self.eval_expr(&*value));
                 }
                 return Value::Table(user_table);
-            }
+            },
         }
     }
 }

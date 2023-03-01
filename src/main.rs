@@ -54,10 +54,8 @@ fn exec(expr: String, interp: &mut Interpreter) {
     let mut parser = Parser::new(tokens);
     let chunk = parser.chunk();
     if let Ok(chunk) = chunk {
-        for smt in chunk {
-            if let Err(err) = interp.eval_stmt(&smt) {
-                println!("{err}");
-            }
+        if let Err(err) = interp.eval_stmt(&chunk) {
+            println!("{err}");
         }
     } else if let Err(s) = chunk {
         println!("Error parsing: {s}");
