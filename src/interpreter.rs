@@ -535,61 +535,53 @@ impl Interpreter {
                 return Value::ValList(values);
             },
             Expr::FunctionCall(func_id, vars) => {
-                if let Expr::Var(func_id) = &**func_id {
-                    let func_val = self.find_var(func_id);
+                let func_val = self.eval_expr(&**func_id);
                     match func_val {
-                        Some(v) => {
-                            match v.clone() {
-                                Value::FunctionDef(fd) => {
-                                    let mut args_decls: Vec<Stmt> = vec![];
-                                    let mut arg_counter = 0;
-                                    for param in fd.get_params() {
-                                        if let Some(arg) = vars.get(arg_counter) {
-                                            args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![arg.clone()])));
-                                        } else {
-                                            args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(Value::Nil)])));
-                                        }
-                                        arg_counter += 1;
-                                    }
-                                    let func_body = fd.get_body();
-                                    self.push_env();
-                                    for decl in args_decls.into_iter() {
-                                        if let Err(e) = self.eval_stmt(&decl) {
-                                            panic!("Error declaring args: {e}");
-                                        }
-                                    }
-                                    let func_eval = self.eval_stmt(func_body);
-                                    if let Err(func_body_err) = func_eval {
-                                        println!("{func_body_err}");
-                                    } else if let Ok(None) = func_eval {
-                                        // Do nothing
-                                    } else if let Ok(Some(func_ret)) = func_eval {
-                                        let ret_val = self.eval_expr(&func_ret);
-                                        self.pop_env();
-                                        return ret_val;
-                                    }
-                                    self.pop_env();
-                                },
-                                Value::NativeFunctionDef(nf) => {
-                                    let mut args: Vec<Value> = vec![];
-                                    for p in vars.iter() {
-                                        args.push(self.eval_expr(p));
-                                    }
-                                    self.push_env();
-                                    let func_eval = nf.call(self, &mut args);
-                                    self.pop_env();
-                                    if let Some(ret_val) = func_eval {
-                                        return ret_val;
-                                    }
-                                },
-                                _ => {
-                                    
+                        Value::FunctionDef(fd) => {
+                            let mut args_decls: Vec<Stmt> = vec![];
+                            let mut arg_counter = 0;
+                            for param in fd.get_params() {
+                                if let Some(arg) = vars.get(arg_counter) {
+                                    args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![arg.clone()])));
+                                } else {
+                                    args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(Value::Nil)])));
                                 }
+                                arg_counter += 1;
+                            }
+                            let func_body = fd.get_body();
+                            self.push_env();
+                            for decl in args_decls.into_iter() {
+                                if let Err(e) = self.eval_stmt(&decl) {
+                                    panic!("Error declaring args: {e}");
+                                }
+                            }
+                            let func_eval = self.eval_stmt(func_body);
+                            if let Err(func_body_err) = func_eval {
+                                println!("{func_body_err}");
+                            } else if let Ok(None) = func_eval {
+                                // Do nothing
+                            } else if let Ok(Some(func_ret)) = func_eval {
+                                let ret_val = self.eval_expr(&func_ret);
+                                self.pop_env();
+                                return ret_val;
+                            }
+                            self.pop_env();
+                        },
+                        Value::NativeFunctionDef(nf) => {
+                            let mut args: Vec<Value> = vec![];
+                            for p in vars.iter() {
+                                args.push(self.eval_expr(p));
+                            }
+                            self.push_env();
+                            let func_eval = nf.call(self, &mut args);
+                            self.pop_env();
+                            if let Some(ret_val) = func_eval {
+                                return ret_val;
                             }
                         },
                         _ => {println!("Cannot call value");}
                     }
-                }
+                
                 return Value::Nil;
             },
             Expr::Accessor(bt, ba) => {
@@ -602,6 +594,13 @@ impl Interpreter {
                     return self.eval_expr(bt.as_ref());
                 }
                 Value::Nil
+            },
+            Expr::FieldList(fl) => {
+                let user_table = crate::table::UserTable::new();
+                for (key, value) in fl.into_iter() {
+                    user_table.table.as_ref().borrow_mut().insert(self.eval_expr(&*key), self.eval_expr(&*value));
+                }
+                return Value::Table(user_table);
             }
         }
     }

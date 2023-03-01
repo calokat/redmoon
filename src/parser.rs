@@ -1,3 +1,5 @@
+use ordered_float::OrderedFloat;
+
 use crate::{Token, Expr, Stmt, function::Function, values::Value, table::UserTable};
 
 pub struct Parser {
@@ -14,8 +16,7 @@ impl Parser {
         if let Some(Token::Literal(v)) = self.current_token() {
             self.advance();
             return Ok(Expr::Literal(v.clone()));
-        } else if self.current_token() == Some(Token::LeftParens) {
-            self.advance();
+        } else if self.check_token_type(Token::LeftParens) {
             let expr_res = self.expr_list();
             if let Ok(expr) = expr_res {
                 let expr = Expr::Grouping(Box::new(expr));
@@ -27,20 +28,6 @@ impl Parser {
             return expr_res;
         } else if let Some(Token::Identifier(s)) = self.current_token() {
             self.advance();
-            if self.check_token_type(Token::LeftParens) {
-                if !self.check_token_type(Token::RightParens) {
-                    let args = self.expr_list()?;
-                    if !self.check_token_type(Token::RightParens) {
-                        return Err("Function call is missing right parens".into());
-                    }
-                    if let Expr::Exprlist(args) = args {
-                        return Ok(Expr::FunctionCall(Box::new(Expr::Var(s.clone())), args));
-                    }
-                } else {
-                    return Ok(Expr::FunctionCall(Box::new(Expr::Var(s.clone())), vec![]));
-                }
-
-            }
             return Ok(Expr::Var(s.clone()));
         } else if Some(Token::Function) == self.current_token() {
             return self.function_def();
@@ -86,6 +73,18 @@ impl Parser {
                 left = Expr::Accessor(Box::new(left), Box::new(right));
                 if !self.check_token_type(Token::RightSquareBracket) {
                     return Err("Missing right square bracket".into());
+                }
+            } else if self.check_token_type(Token::LeftParens) {
+                if !self.check_token_type(Token::RightParens) {
+                    let args = self.expr_list()?;
+                    if !self.check_token_type(Token::RightParens) {
+                        return Err("Function call is missing right parens".into());
+                    }
+                    if let Expr::Exprlist(args) = args {
+                        return Ok(Expr::FunctionCall(Box::new(left), args));
+                    }
+                } else {
+                    return Ok(Expr::FunctionCall(Box::new(left), vec![]));
                 }
             } else {
                 break;
@@ -176,12 +175,41 @@ impl Parser {
         return Ok(expr);
     }
 
+    fn is_field_seperator(&mut self) -> bool {
+        self.check_token_type(Token::Comma) || self.check_token_type(Token::Semicolon)
+    }
+
+    fn field_list(&mut self) -> Result<Expr, String> {
+        let mut fields: Vec<(Box<Expr>, Box<Expr>)> = vec![];
+        let mut field_counter = 1;
+        while !self.check_token_type(Token::RightCurlyBrace) {
+            if self.check_token_type(Token::LeftSquareBracket) {
+                let key = self.expression()?;
+                assert!(self.check_token_type(Token::RightSquareBracket), "expect closing bracket when declaring fields in a table");
+                assert!(self.check_token_type(Token::Assign), "field needs to be assigned to");
+                let value = self.expression()?;
+                fields.push((Box::new(key), Box::new(value)));
+                assert!(self.is_field_seperator() || self.current_token() == Some(Token::RightCurlyBrace), "Fields need to be properly separated");
+            } else {
+                let expr = self.expression()?;
+                if self.is_field_seperator() || self.current_token() == Some(Token::RightCurlyBrace) {
+                    fields.push((Box::new(Expr::Literal(Value::Number(OrderedFloat(field_counter as f32)))), Box::new(expr)));
+                } else if self.check_token_type(Token::Assign) {
+                    if let Expr::Var(s) = expr {
+                        let value = self.expression()?;
+                        fields.push((Box::new(Expr::Literal(Value::String(s))), Box::new(value)));
+
+                    }
+                }
+            }
+            field_counter += 1;
+        }
+        Ok(Expr::FieldList(fields))
+    }
+
     fn table(&mut self) -> Result<Expr, String> {
         if self.check_token_type(Token::LeftCurlyBrace) {
-            if !self.check_token_type(Token::RightCurlyBrace) {
-                return Err("Table constructor missing right curly brace".into());
-            }
-            return Ok(Expr::Literal(Value::Table(UserTable::new())));
+            return self.field_list();
         }
         return self.equality();
     }
