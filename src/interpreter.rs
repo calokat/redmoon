@@ -1,4 +1,4 @@
-use crate::{Token, Expr, Stmt, Value, table::{Table}, native_function::NativeFunction};
+use crate::{Token, Expr, Stmt, Value, table::{Table}, native_function::NativeFunction, function::Function};
 use std::{collections::{VecDeque}, borrow::{BorrowMut}};
 
 
@@ -22,6 +22,14 @@ impl Interpreter {
 
     fn push_env(&mut self) {
         self.stack.push_back(Table::new());
+    }
+
+    fn push_custom_env(&mut self, env: Table) {
+        println!("Pushing custom env");
+        for (name, value) in &env {
+            println!("{}: {value}", name);
+        };
+        self.stack.push_back(env);
     }
 
     fn pop_env(&mut self) {
@@ -255,6 +263,16 @@ impl Interpreter {
         Ok(None)
     }
 
+    // fn complete_closure(&mut self, func: &mut Function) {
+    //     for (name, value) in func.get_closure().table.as_ref().borrow_mut().iter_mut() {
+    //         if let Value::String(r) = name {
+    //             *value = self.find_var(&r).unwrap_or(&Value::Nil).clone();
+    //         } else {
+    //             println!("Ohno");
+    //         }
+    //     }
+    // } 
+
     pub fn eval_stmt(&mut self, s: &Stmt) -> Result<Option<Expr>, String> {
         match s {
             Stmt::Empty => {
@@ -271,9 +289,21 @@ impl Interpreter {
                         let e_res = self.eval_expr(&e);
                         if let Value::ValList(vl) = e_res {
                             for v in vl.into_iter() {
+                                // if let Value::FunctionDef(mut fd) = v {
+                                //     self.complete_closure(&mut fd);
+                                //     val_vec.push(Value::FunctionDef(fd));
+                                // } else {
+                                //     val_vec.push(v);
+                                // }
                                 val_vec.push(v);
                             }
                         } else {
+                            // if let Value::FunctionDef(mut fd) = e_res {
+                            //     self.complete_closure(&mut fd);
+                            //     val_vec.push(Value::FunctionDef(fd));
+                            // } else {
+                            //     val_vec.push(e_res);
+                            // }
                             val_vec.push(e_res);
                         }
                     }
@@ -589,6 +619,7 @@ impl Interpreter {
                             }
                             let func_body = fd.get_body();
                             self.push_env();
+                            // self.push_custom_env(fd.get_closure().table.as_ref().borrow().clone());
                             for decl in args_decls.into_iter() {
                                 if let Err(e) = self.eval_stmt(&decl) {
                                     panic!("Error declaring args: {e}");
@@ -621,7 +652,12 @@ impl Interpreter {
                                 return ret_val;
                             }
                         },
-                        _ => {println!("Cannot call value");}
+                        Value::Nil => {
+                            println!("Cannot call nil");
+                        },
+                        _ => {
+                            println!("Cannot call value");
+                        }
                     }
                 
                 return Value::Nil;

@@ -28,11 +28,100 @@ impl Parser {
             return expr_res;
         } else if let Some(Token::Identifier(s)) = self.current_token() {
             self.advance();
-            return Ok(Expr::Var(s.clone()));
+            return Ok(Expr::Var(s));
         } else if Some(Token::Function) == self.current_token() {
             return self.function_def();
         }
         return Err("Unknown token".into());
+    }
+
+    fn extract_vars_from_expr(expr: &Expr) -> Vec<Value> {
+        let mut res = vec![];
+        match expr {
+            Expr::Exprlist(list) => {
+                for var in list {
+                    res.append(&mut Self::extract_vars_from_expr(&var));
+                }
+            },
+            Expr::Binary(left, _, right) => {
+                res.append(&mut Self::extract_vars_from_expr(&*left));
+                res.append(&mut Self::extract_vars_from_expr(&*right));
+            },
+            Expr::FieldList(list) => {
+                for (name, value) in list {
+                    res.append(&mut Self::extract_vars_from_expr(&*name));
+                    res.append(&mut Self::extract_vars_from_expr(&*value));
+                }
+            },
+            Expr::FunctionCall(func, params) => {
+                res.append(&mut Self::extract_vars_from_expr(&*func));
+                for p in params {
+                    res.append(&mut Self::extract_vars_from_expr(&p));
+                }
+            },
+            Expr::Grouping(group) => {
+                res.append(&mut Self::extract_vars_from_expr(&*group));
+            },
+            Expr::Literal(_) => {/* Do nothing */},
+            Expr::Var(s) => {
+                res.push(Value::String(s.clone()))
+            },
+            Expr::Unary(expr, _) => {
+                res.append(&mut Self::extract_vars_from_expr(&*expr));
+            },
+            Expr::Accessor(accessee, accessor) => {
+                res.append(&mut Self::extract_vars_from_expr(&*accessee));
+                res.append(&mut Self::extract_vars_from_expr(&*accessor));
+
+            }
+        };
+        res
+    }
+
+    fn extract_vars_from_stmt(stmt: &Stmt) -> Vec<Value> {
+        let mut res = vec![];
+        match stmt {
+            Stmt::Assignment(vars, vals) => {
+                res.append(&mut Self::extract_vars_from_expr(vars));
+                res.append(&mut Self::extract_vars_from_expr(vals));
+            },
+            Stmt::ExprStmt(expr)=> {
+                res.append(&mut Self::extract_vars_from_expr(expr));
+            },
+            Stmt::LocalAssignment(vars, vals) => {
+                res.append(&mut Self::extract_vars_from_expr(vals));
+            },
+            Stmt::Return(expr) => {
+                res.append(&mut Self::extract_vars_from_expr(expr));
+            },
+            Stmt::DoBlock(stmts) => {
+                for s in stmts {
+                    res.append(&mut Self::extract_vars_from_stmt(s));
+                }
+            },
+            Stmt::Block(stmts) => {
+                for s in stmts {
+                    res.append(&mut Self::extract_vars_from_stmt(s));
+                }
+            },
+            Stmt::IfStmt(cond, body, else_clause) => {
+                res.append(&mut Self::extract_vars_from_expr(cond));
+                res.append(&mut Self::extract_vars_from_stmt(&**body));
+                res.append(&mut Self::extract_vars_from_stmt(&**else_clause));
+            },
+            Stmt::RepeatUntilLoop(body, cond) => {
+                res.append(&mut Self::extract_vars_from_stmt(&**body));
+                res.append(&mut Self::extract_vars_from_expr(cond));
+            },
+            Stmt::WhileLoop(cond, body) => {
+                res.append(&mut Self::extract_vars_from_expr(cond));
+                res.append(&mut Self::extract_vars_from_stmt(&**body));
+            },
+            Stmt::Empty => {/* Do nothing */},
+            Stmt::Break => {/* Do nothing */},
+            Stmt::Chunk(_) => {panic!("Chunk should only be at the global level")},
+        };
+        res
     }
 
     fn function_def(&mut self) -> Result<Expr, String> {
@@ -54,7 +143,12 @@ impl Parser {
         assert!(self.check_token_type(Token::RightParens), "Function definition needs a closing parentheses");
         if let Expr::Exprlist(params) = params {
             let body = Box::new(Stmt::Block(self.do_block()?));
-            return Ok(Expr::Literal(Value::FunctionDef(Function::new(body, params, f_name))));
+            let closure = UserTable::new();
+            let found_vars = Self::extract_vars_from_stmt(&*body);
+            for fv in found_vars.into_iter() {
+                closure.table.as_ref().borrow_mut().insert(fv, Value::Nil);
+            }
+            return Ok(Expr::Literal(Value::FunctionDef(Function::new(body, params, f_name, closure))));
         } else {
             return Err("Invalid parameter in function definition".into());
         }

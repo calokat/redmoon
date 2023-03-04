@@ -1,6 +1,6 @@
-use std::{hash::Hash, rc::Rc, borrow::Borrow};
+use std::{hash::Hash, rc::Rc, borrow::{Borrow, BorrowMut}};
 
-use crate::{stmt::Stmt, expr::Expr};
+use crate::{stmt::Stmt, expr::Expr, table::UserTable};
 
 #[derive(Clone)]
 pub struct Function {
@@ -18,8 +18,8 @@ impl PartialEq for Function {
 impl Eq for Function {}
 
 impl Function {
-    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>) -> Self {
-        Self { fi: Rc::new(FunctionImpl::new(body, params, name)) }
+    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: UserTable) -> Self {
+        Self { fi: Rc::new(FunctionImpl::new(body, params, name, closure)) }
     }
 
     pub fn get_name(&self) -> Option<String> {
@@ -33,12 +33,17 @@ impl Function {
     pub fn get_body(&self) -> &Stmt {
         &self.fi.body
     }
+
+    pub fn get_closure(&self) -> &UserTable {
+        &self.fi.closure
+    }
 }
 
 pub struct FunctionImpl {
     pub body: Box<Stmt>,
     pub params: Vec<Expr>,
     pub name: Option<String>,
+    pub closure: UserTable,
 }
 
 impl Hash for Function {
@@ -50,17 +55,18 @@ impl Hash for Function {
 
 impl Clone for FunctionImpl {
     fn clone(&self) -> Self {
-        return Self { body: self.body.clone(), params: self.params.clone(), name: self.name.clone() }
+        return Self { body: self.body.clone(), params: self.params.clone(), name: self.name.clone(), closure: self.closure.clone() }
     }
 }
 
 impl FunctionImpl {
 
-    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>) -> Self {
+    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: UserTable) -> Self {
         let this = Self {
             body,
             params,
-            name
+            name,
+            closure
         };
         this
     }
