@@ -25,7 +25,6 @@ impl Interpreter {
     }
 
     fn push_custom_env(&mut self, env: Table) {
-        println!("Pushing custom env");
         for (name, value) in &env {
             println!("{}: {value}", name);
         };
@@ -263,15 +262,15 @@ impl Interpreter {
         Ok(None)
     }
 
-    // fn complete_closure(&mut self, func: &mut Function) {
-    //     for (name, value) in func.get_closure().table.as_ref().borrow_mut().iter_mut() {
-    //         if let Value::String(r) = name {
-    //             *value = self.find_var(&r).unwrap_or(&Value::Nil).clone();
-    //         } else {
-    //             println!("Ohno");
-    //         }
-    //     }
-    // } 
+    fn complete_closure(&mut self, func: &mut Function) {
+        for (name, value) in func.get_closure().table.as_ref().borrow_mut().iter_mut() {
+            if let Value::String(s) = name {
+                *value = self.find_var(&s).unwrap_or_else(|| {println!("Found var {s}, but it's nil"); &Value::Nil}).clone();
+            } else {
+                panic!("Capturing variable that does not exist");
+            }
+        }
+    }
 
     pub fn eval_stmt(&mut self, s: &Stmt) -> Result<Option<Expr>, String> {
         match s {
@@ -289,21 +288,9 @@ impl Interpreter {
                         let e_res = self.eval_expr(&e);
                         if let Value::ValList(vl) = e_res {
                             for v in vl.into_iter() {
-                                // if let Value::FunctionDef(mut fd) = v {
-                                //     self.complete_closure(&mut fd);
-                                //     val_vec.push(Value::FunctionDef(fd));
-                                // } else {
-                                //     val_vec.push(v);
-                                // }
                                 val_vec.push(v);
                             }
                         } else {
-                            // if let Value::FunctionDef(mut fd) = e_res {
-                            //     self.complete_closure(&mut fd);
-                            //     val_vec.push(Value::FunctionDef(fd));
-                            // } else {
-                            //     val_vec.push(e_res);
-                            // }
                             val_vec.push(e_res);
                         }
                     }
@@ -324,6 +311,9 @@ impl Interpreter {
                             if let Value::Table(accessed_table) = resolved_accessors {
                                 accessed_table.table.as_ref().borrow_mut().insert(key, val_vec[val_counter].clone());
                             }
+                        }
+                        if let Some(Value::FunctionDef(fd)) = val_vec.get_mut(val_counter) {
+                            self.complete_closure(fd);
                         }
                         val_counter += 1;
                     }
@@ -548,6 +538,9 @@ impl Interpreter {
                 }
             },
             Expr::Literal(t) => {
+                if let Value::FunctionDef(fd) = t.clone().borrow_mut() {
+                    self.complete_closure(fd)
+                }
                 t.clone()
             },
             Expr::Unary(e, op) => {
@@ -618,8 +611,7 @@ impl Interpreter {
                                 arg_counter += 1;
                             }
                             let func_body = fd.get_body();
-                            self.push_env();
-                            // self.push_custom_env(fd.get_closure().table.as_ref().borrow().clone());
+                            self.push_custom_env(fd.get_closure().table.as_ref().borrow().clone());
                             for decl in args_decls.into_iter() {
                                 if let Err(e) = self.eval_stmt(&decl) {
                                     panic!("Error declaring args: {e}");

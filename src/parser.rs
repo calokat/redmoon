@@ -35,87 +35,89 @@ impl Parser {
         return Err("Unknown token".into());
     }
 
-    fn extract_vars_from_expr(expr: &Expr) -> Vec<Value> {
+    fn extract_vars_from_expr(expr: &Expr, params: &Vec<Expr>) -> Vec<Value> {
         let mut res = vec![];
         match expr {
             Expr::Exprlist(list) => {
                 for var in list {
-                    res.append(&mut Self::extract_vars_from_expr(&var));
+                    res.append(&mut Self::extract_vars_from_expr(&var, params));
                 }
             },
             Expr::Binary(left, _, right) => {
-                res.append(&mut Self::extract_vars_from_expr(&*left));
-                res.append(&mut Self::extract_vars_from_expr(&*right));
+                res.append(&mut Self::extract_vars_from_expr(&*left, params));
+                res.append(&mut Self::extract_vars_from_expr(&*right, params));
             },
             Expr::FieldList(list) => {
                 for (name, value) in list {
-                    res.append(&mut Self::extract_vars_from_expr(&*name));
-                    res.append(&mut Self::extract_vars_from_expr(&*value));
+                    res.append(&mut Self::extract_vars_from_expr(&*name, params));
+                    res.append(&mut Self::extract_vars_from_expr(&*value, params));
                 }
             },
-            Expr::FunctionCall(func, params) => {
-                res.append(&mut Self::extract_vars_from_expr(&*func));
-                for p in params {
-                    res.append(&mut Self::extract_vars_from_expr(&p));
+            Expr::FunctionCall(func, args) => {
+                res.append(&mut Self::extract_vars_from_expr(&*func, params));
+                for a in args {
+                    res.append(&mut Self::extract_vars_from_expr(&a, params));
                 }
             },
             Expr::Grouping(group) => {
-                res.append(&mut Self::extract_vars_from_expr(&*group));
+                res.append(&mut Self::extract_vars_from_expr(&*group, params));
             },
             Expr::Literal(_) => {/* Do nothing */},
             Expr::Var(s) => {
-                res.push(Value::String(s.clone()))
+                if !params.contains(expr) {
+                    res.push(Value::String(s.clone()))
+                }
             },
             Expr::Unary(expr, _) => {
-                res.append(&mut Self::extract_vars_from_expr(&*expr));
+                res.append(&mut Self::extract_vars_from_expr(&*expr, params));
             },
             Expr::Accessor(accessee, accessor) => {
-                res.append(&mut Self::extract_vars_from_expr(&*accessee));
-                res.append(&mut Self::extract_vars_from_expr(&*accessor));
+                res.append(&mut Self::extract_vars_from_expr(&*accessee, params));
+                res.append(&mut Self::extract_vars_from_expr(&*accessor, params));
 
             }
         };
         res
     }
 
-    fn extract_vars_from_stmt(stmt: &Stmt) -> Vec<Value> {
+    fn extract_vars_from_stmt(stmt: &Stmt, params: &Vec<Expr>) -> Vec<Value> {
         let mut res = vec![];
         match stmt {
             Stmt::Assignment(vars, vals) => {
-                res.append(&mut Self::extract_vars_from_expr(vars));
-                res.append(&mut Self::extract_vars_from_expr(vals));
+                res.append(&mut Self::extract_vars_from_expr(vars, params));
+                res.append(&mut Self::extract_vars_from_expr(vals, params));
             },
             Stmt::ExprStmt(expr)=> {
-                res.append(&mut Self::extract_vars_from_expr(expr));
+                res.append(&mut Self::extract_vars_from_expr(expr, params));
             },
-            Stmt::LocalAssignment(vars, vals) => {
-                res.append(&mut Self::extract_vars_from_expr(vals));
+            Stmt::LocalAssignment(_, vals) => {
+                res.append(&mut Self::extract_vars_from_expr(vals, params));
             },
             Stmt::Return(expr) => {
-                res.append(&mut Self::extract_vars_from_expr(expr));
+                res.append(&mut Self::extract_vars_from_expr(expr, params));
             },
             Stmt::DoBlock(stmts) => {
                 for s in stmts {
-                    res.append(&mut Self::extract_vars_from_stmt(s));
+                    res.append(&mut Self::extract_vars_from_stmt(s, params));
                 }
             },
             Stmt::Block(stmts) => {
                 for s in stmts {
-                    res.append(&mut Self::extract_vars_from_stmt(s));
+                    res.append(&mut Self::extract_vars_from_stmt(s, params));
                 }
             },
             Stmt::IfStmt(cond, body, else_clause) => {
-                res.append(&mut Self::extract_vars_from_expr(cond));
-                res.append(&mut Self::extract_vars_from_stmt(&**body));
-                res.append(&mut Self::extract_vars_from_stmt(&**else_clause));
+                res.append(&mut Self::extract_vars_from_expr(cond, params));
+                res.append(&mut Self::extract_vars_from_stmt(&**body, params));
+                res.append(&mut Self::extract_vars_from_stmt(&**else_clause, params));
             },
             Stmt::RepeatUntilLoop(body, cond) => {
-                res.append(&mut Self::extract_vars_from_stmt(&**body));
-                res.append(&mut Self::extract_vars_from_expr(cond));
+                res.append(&mut Self::extract_vars_from_stmt(&**body, params));
+                res.append(&mut Self::extract_vars_from_expr(cond, params));
             },
             Stmt::WhileLoop(cond, body) => {
-                res.append(&mut Self::extract_vars_from_expr(cond));
-                res.append(&mut Self::extract_vars_from_stmt(&**body));
+                res.append(&mut Self::extract_vars_from_expr(cond, params));
+                res.append(&mut Self::extract_vars_from_stmt(&**body, params));
             },
             Stmt::Empty => {/* Do nothing */},
             Stmt::Break => {/* Do nothing */},
@@ -144,7 +146,7 @@ impl Parser {
         if let Expr::Exprlist(params) = params {
             let body = Box::new(Stmt::Block(self.do_block()?));
             let closure = UserTable::new();
-            let found_vars = Self::extract_vars_from_stmt(&*body);
+            let found_vars = Self::extract_vars_from_stmt(&*body, &params);
             for fv in found_vars.into_iter() {
                 closure.table.as_ref().borrow_mut().insert(fv, Value::Nil);
             }

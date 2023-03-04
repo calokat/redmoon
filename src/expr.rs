@@ -1,5 +1,5 @@
 use crate::{Token, Value};
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Expr {
     Binary(Box<Expr>, Token, Box<Expr>),
     Unary(Box<Expr>, Token),
