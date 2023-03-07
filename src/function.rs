@@ -1,16 +1,16 @@
-use std::{hash::Hash, rc::Rc, borrow::{Borrow, BorrowMut}};
+use std::{hash::Hash, rc::Rc, borrow::{Borrow, BorrowMut}, collections::VecDeque, cell::RefCell};
 
 use crate::{stmt::Stmt, expr::Expr, table::UserTable};
 
 #[derive(Clone)]
 pub struct Function {
-    fi: Rc<FunctionImpl>
+    fi: Rc<RefCell<FunctionImpl>>
 }
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        let self_addr = self.fi.as_ref() as *const FunctionImpl as usize;
-        let other_addr = other.fi.as_ref() as *const FunctionImpl as usize;
+        let self_addr = self.fi.as_ptr() as *const FunctionImpl as usize;
+        let other_addr = other.fi.as_ptr() as *const FunctionImpl as usize;
         return self_addr == other_addr;
     }
 }
@@ -18,24 +18,31 @@ impl PartialEq for Function {
 impl Eq for Function {}
 
 impl Function {
-    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: UserTable) -> Self {
-        Self { fi: Rc::new(FunctionImpl::new(body, params, name, closure)) }
+    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: VecDeque<UserTable>) -> Self {
+        Self { fi: Rc::new(RefCell::new(FunctionImpl::new(body, params, name, closure))) }
     }
 
     pub fn get_name(&self) -> Option<String> {
-        self.fi.as_ref().name.clone()
+        self.fi.as_ref().borrow().name.clone()
     }
 
-    pub fn get_params(&self) -> &Vec<Expr> {
-        self.fi.params.borrow()
+    pub fn get_params(&self) -> Vec<Expr> {
+        self.fi.as_ref().borrow().params.clone()
     }
 
-    pub fn get_body(&self) -> &Stmt {
-        &self.fi.body
+    pub fn get_body(&self) -> Stmt {
+        *self.fi.as_ref().borrow().body.clone()
     }
 
-    pub fn get_closure(&self) -> &UserTable {
-        &self.fi.closure
+    pub fn get_closure(&self) -> VecDeque<UserTable> {
+        self.fi.as_ref().borrow().closure.clone()
+    }
+
+    pub fn set_closure(&mut self, new_closure: VecDeque<UserTable>) {
+        self.fi.as_ref().borrow_mut().closure.borrow_mut().clear();
+        for nc in new_closure {
+            self.fi.as_ref().borrow_mut().closure.push_back(nc);
+        }
     }
 }
 
@@ -43,7 +50,7 @@ pub struct FunctionImpl {
     pub body: Box<Stmt>,
     pub params: Vec<Expr>,
     pub name: Option<String>,
-    pub closure: UserTable,
+    pub closure: VecDeque<UserTable>,
 }
 
 impl Hash for Function {
@@ -61,7 +68,7 @@ impl Clone for FunctionImpl {
 
 impl FunctionImpl {
 
-    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: UserTable) -> Self {
+    pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: VecDeque<UserTable>) -> Self {
         let this = Self {
             body,
             params,

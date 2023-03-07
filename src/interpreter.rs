@@ -1,10 +1,10 @@
-use crate::{Token, Expr, Stmt, Value, table::{Table}, native_function::NativeFunction, function::Function};
-use std::{collections::{VecDeque}, borrow::{BorrowMut}};
+use crate::{Token, Expr, Stmt, Value, table::{Table, UserTable}, native_function::NativeFunction, function::Function};
+use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}};
 
 
 pub struct Interpreter {
-    _G: Table,
-    stack: VecDeque<Table>,
+    _G: UserTable,
+    stack: VecDeque<UserTable>,
 }
 
 impl Interpreter {
@@ -15,19 +15,16 @@ impl Interpreter {
             }
             None
         })));
-        let mut _G = Table::new();
-        _G.insert(Value::String("print".into()), print);
+        let mut _G = UserTable::new();
+        _G.table.as_ref().borrow_mut().insert(Value::String("print".into()), print);
         Self { _G, stack: VecDeque::new() }
     }
 
     fn push_env(&mut self) {
-        self.stack.push_back(Table::new());
+        self.stack.push_back(UserTable::new());
     }
 
-    fn push_custom_env(&mut self, env: Table) {
-        for (name, value) in &env {
-            println!("{}: {value}", name);
-        };
+    fn push_custom_env(&mut self, env: UserTable) {
         self.stack.push_back(env);
     }
 
@@ -35,7 +32,7 @@ impl Interpreter {
         self.stack.pop_back();
     }
 
-    fn get_current_stack_env(&mut self) -> &mut Table {
+    fn get_current_stack_env(&mut self) -> &mut UserTable {
         if let Some(env) = self.stack.back_mut() {
             return env;
         } else {
@@ -44,14 +41,14 @@ impl Interpreter {
 
     }
 
-    fn find_var(&self, name: &String) -> Option<&Value> {
+    fn find_var(&self, name: &String) -> Option<Value> {
         let val_key = Value::String(name.clone());
         for t in self.stack.iter().rev() {
-            if let Some(ret) = t.get(&val_key) {
-                return Some(ret);
+            if let Some(ret) = t.table.as_ref().borrow().get(&val_key) {
+                return Some(ret.clone());
             }
         }
-        return self._G.get(&val_key);
+        return self._G.table.as_ref().borrow_mut().get(&val_key).cloned();
     }
 
     fn stringify(&self, v: Value) -> Result<Value, String> {
@@ -263,13 +260,14 @@ impl Interpreter {
     }
 
     fn complete_closure(&mut self, func: &mut Function) {
-        for (name, value) in func.get_closure().table.as_ref().borrow_mut().iter_mut() {
-            if let Value::String(s) = name {
-                *value = self.find_var(&s).unwrap_or_else(|| {println!("Found var {s}, but it's nil"); &Value::Nil}).clone();
-            } else {
-                panic!("Capturing variable that does not exist");
-            }
-        }
+        // for (name, value) in func.get_closure().table.as_ref().borrow_mut().iter_mut() {
+        //     if let Value::String(s) = name {
+        //         *value = self.find_var(&s).unwrap_or_else(|| {println!("Found var {s}, but it's nil"); Value::Nil}).clone();
+        //     } else {
+        //         panic!("Capturing variable that does not exist");
+        //     }
+        // }
+        func.set_closure(self.stack.clone())
     }
 
     pub fn eval_stmt(&mut self, s: &Stmt) -> Result<Option<Expr>, String> {
@@ -299,11 +297,11 @@ impl Interpreter {
                     let mut val_counter = 0;
                     for var in var_list.iter() {
                         if let Expr::Var(var_name) = var {
-                            let t = self.stack.iter_mut().find(|entry| {entry.get(&Value::String(var_name.to_string())) != None}).unwrap_or_else(|| &mut self._G);
+                            let t = self.stack.iter_mut().find(|entry| {entry.table.as_ref().borrow().get(&Value::String(var_name.to_string())) != None}).unwrap_or_else(|| &mut self._G);
                             if let Some(val) = val_vec.get(val_counter) {
-                                t.insert(Value::String(var_name.clone()), val.clone());
+                                t.table.as_ref().borrow_mut().insert(Value::String(var_name.clone()), val.clone());
                             } else {
-                                t.insert(Value::String(var_name.clone()), Value::Nil);
+                                t.table.as_ref().borrow_mut().insert(Value::String(var_name.clone()), Value::Nil);
                             }
                         } else if let Expr::Accessor(accessors, field) = var {
                             let key = self.eval_expr(field.as_ref());
@@ -334,9 +332,9 @@ impl Interpreter {
                     for var in var_list.iter() {
                         if let Expr::Var(var_name) = var {
                             if let Some(val) = val_vec.get(val_counter) {
-                                self.get_current_stack_env().insert(Value::String(var_name.clone()), val.clone());
+                                self.get_current_stack_env().table.as_ref().borrow_mut().insert(Value::String(var_name.clone()), val.clone());
                             } else {
-                                self.get_current_stack_env().insert(Value::String(var_name.clone()), Value::Nil);
+                                self.get_current_stack_env().table.as_ref().borrow_mut().insert(Value::String(var_name.clone()), Value::Nil);
                             }
                             val_counter += 1;
                         } else {
@@ -611,13 +609,15 @@ impl Interpreter {
                                 arg_counter += 1;
                             }
                             let func_body = fd.get_body();
-                            self.push_custom_env(fd.get_closure().table.as_ref().borrow().clone());
+                            for c in fd.get_closure().clone() {
+                                self.push_custom_env(c.clone());
+                            }
                             for decl in args_decls.into_iter() {
                                 if let Err(e) = self.eval_stmt(&decl) {
                                     panic!("Error declaring args: {e}");
                                 }
                             }
-                            let func_eval = self.eval_stmt(func_body);
+                            let func_eval = self.eval_stmt(&func_body);
                             if let Err(func_body_err) = func_eval {
                                 println!("{func_body_err}");
                             } else if let Ok(None) = func_eval {

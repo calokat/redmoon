@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use ordered_float::OrderedFloat;
 
 use crate::{Token, Expr, Stmt, function::Function, values::Value, table::UserTable};
@@ -150,7 +152,7 @@ impl Parser {
             for fv in found_vars.into_iter() {
                 closure.table.as_ref().borrow_mut().insert(fv, Value::Nil);
             }
-            return Ok(Expr::Literal(Value::FunctionDef(Function::new(body, params, f_name, closure))));
+            return Ok(Expr::Literal(Value::FunctionDef(Function::new(body, params, f_name, VecDeque::new()))));
         } else {
             return Err("Invalid parameter in function definition".into());
         }
