@@ -1,6 +1,9 @@
 use crate::{Token, Expr, Stmt, Value, table::{Table, UserTable}, native_function::NativeFunction, function::Function};
-use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}};
-
+use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}, fmt};
+#[cfg(target_family = "wasm")]
+use web_sys::console;
+#[cfg(target_family = "wasm")]
+use wasm_bindgen::prelude::*;
 
 pub struct Interpreter {
     _G: UserTable,
@@ -10,7 +13,12 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         let print = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
+            
             if let Some(v) = args.get(0) {
+                if cfg!(target_family = "wasm") {
+                    let v_str: JsValue = format!("From WASM: {}", v).into();
+                    console::log(&v_str.into());
+                }
                 println!("Native print: {v}");
             }
             None
