@@ -15,7 +15,8 @@ impl Interpreter {
         let print = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
             
             if let Some(v) = args.get(0) {
-                if cfg!(target_family = "wasm") {
+                #[cfg(target_family = "wasm")]
+                {
                     let v_str: JsValue = format!("From WASM: {}", v).into();
                     console::log(&v_str.into());
                 }
