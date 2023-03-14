@@ -1,9 +1,13 @@
 use crate::{Token, Expr, Stmt, Value, table::{Table, UserTable}, native_function::NativeFunction, function::Function};
 use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}, fmt};
 #[cfg(target_family = "wasm")]
-use web_sys::console;
+use wasm_bindgen::{JsValue, prelude::*};
+
 #[cfg(target_family = "wasm")]
-use wasm_bindgen::prelude::*;
+#[wasm_bindgen(module = "output-helper.js")]
+extern "C" {
+    fn append_to_output(str: JsValue);
+}
 
 pub struct Interpreter {
     _G: UserTable,
@@ -17,8 +21,8 @@ impl Interpreter {
             if let Some(v) = args.get(0) {
                 #[cfg(target_family = "wasm")]
                 {
-                    let v_str: JsValue = format!("From WASM: {}", v).into();
-                    console::log(&v_str.into());
+                    let v_str: JsValue = format!("{}\n", v).into();
+                    append_to_output(v_str);
                 }
                 println!("Native print: {v}");
             }
