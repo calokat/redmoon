@@ -4,13 +4,13 @@ use crate::{stmt::Stmt, expr::Expr, table::UserTable};
 
 #[derive(Clone)]
 pub struct Function {
-    fi: Rc<RefCell<FunctionImpl>>
+    fi: Box<FunctionImpl>
 }
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        let self_addr = self.fi.as_ptr() as *const FunctionImpl as usize;
-        let other_addr = other.fi.as_ptr() as *const FunctionImpl as usize;
+        let self_addr = self.fi.as_ref() as *const FunctionImpl as usize;
+        let other_addr = other.fi.as_ref() as *const FunctionImpl as usize;
         return self_addr == other_addr;
     }
 }
@@ -19,19 +19,19 @@ impl Eq for Function {}
 
 impl Function {
     pub fn new(body: Box<Stmt>, params: Vec<Expr>, name: Option<String>, closure: VecDeque<UserTable>) -> Self {
-        Self { fi: Rc::new(RefCell::new(FunctionImpl::new(body, params, name, closure))) }
+        Self { fi: Box::new(FunctionImpl::new(body, params, name, closure)) }
     }
 
     pub fn get_name(&self) -> Option<String> {
         self.fi.as_ref().borrow().name.clone()
     }
 
-    pub fn get_params(&self) -> Vec<Expr> {
-        self.fi.as_ref().borrow().params.clone()
+    pub fn get_params(&self) -> &Vec<Expr> {
+        self.fi.as_ref().borrow().params.borrow()
     }
 
-    pub fn get_body(&self) -> Stmt {
-        *self.fi.as_ref().borrow().body.clone()
+    pub fn get_body(&self) -> &Stmt {
+        self.fi.body.borrow()
     }
 
     pub fn get_closure(&self) -> VecDeque<UserTable> {
@@ -39,10 +39,8 @@ impl Function {
     }
 
     pub fn set_closure(&mut self, new_closure: VecDeque<UserTable>) {
-        self.fi.as_ref().borrow_mut().closure.borrow_mut().clear();
-        for nc in new_closure {
-            self.fi.as_ref().borrow_mut().closure.push_back(nc);
-        }
+        let mut_fi: &mut FunctionImpl = self.fi.borrow_mut();
+        mut_fi.closure = new_closure;
     }
 }
 
