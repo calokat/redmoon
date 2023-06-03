@@ -101,73 +101,62 @@ impl Interpreter {
         }
     }
 
-    fn add_vals(&mut self, t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            if let Value::Number(f2) = t2 {
-                println!("{}", f1 + f2);
-                return Value::Number(f1 + f2);
-            } else if let Value::Table(ut) = t2 {
-                let table = ut.table.as_ref().borrow();
-                let metatable_opt = table.get(&Value::MetaKey);
-                if let Some(metatable_val) = metatable_opt {
-                    if let Value::Table(metatable) = metatable_val {
-                        let metatable_ref = metatable.table.as_ref().borrow();
-                        if let Some(add_entry) = metatable_ref.get(&Value::String("__add".into())) {
-                            if let Value::FunctionDef(add_mm) = add_entry {
-                                return self.call_fn(add_mm, &vec![Expr::Literal(t1), Expr::Literal(Value::Table(ut.clone()))]);
-                            } else {
-                                panic!("__add is not a function");
-                            }
-                        } else {
-                            panic!("add metamethod does not exist");
-                        }
-                    } else {
-                        panic!("Addition only applies to numbers");
-                    }
-                } else {
-                    panic!("Addition only applies to numbers");
-                }
-            } else {
-                panic!("Addition only applies to numbers");
+    fn are_both_values_numbers(v1: &Value, v2: &Value) -> Option<(ordered_float::OrderedFloat<f32>, ordered_float::OrderedFloat<f32>)> {
+        if let Value::Number(n1) = v1 {
+            if let Value::Number(n2) = v2 {
+                return Some((n1.clone(), n2.clone()));
             }
-        } else if let Value::Table(ut) = t1.clone() {
-            let table = ut.table.as_ref().borrow();
-            let metatable_opt = table.get(&Value::MetaKey);
-            if let Some(metatable_val) = metatable_opt {
-                if let Value::Table(metatable) = metatable_val {
-                    let metatable_ref = metatable.table.as_ref().borrow();
-                    if let Some(add_entry) = metatable_ref.get(&Value::String("__add".into())) {
-                        if let Value::FunctionDef(add_mm) = add_entry {
-                            return self.call_fn(add_mm, &vec![Expr::Literal(t1), Expr::Literal(t2)]);
-                        } else {
-                            panic!("__add is not a function");
-                        }
-                    } else {
-                        panic!("add metamethod does not exist");
-                    }
-                } else {
-                    panic!("metatable is not a table");
-                }
-            } else {
-                panic!("metatable does not exist");
-            }
-        } else {
-            panic!("Addition only applies to numbers");
         }
+        return None;
+    }
+
+    fn which_value_is_table<'a>(v1: &'a Value, v2: &'a Value) -> Option<&'a UserTable> {
+        if let Value::Table(table1) = v1 {
+            return Some(table1);                
+        } else if let Value::Table(table2) = v2 {
+            return Some(table2);
+        }
+        None
+    }
+
+    fn get_metatable<'a>(t: &'a UserTable) -> Option<UserTable> {
+        if let Some(Value::Table(ref ut)) = t.table.as_ref().borrow().get(&Value::MetaKey) {
+            return Some(ut.clone());
+        }
+        return None;
+    }
+
+    fn get_metamethod(maybe_metatable: Option<UserTable>, name: String) -> Option<Function> {
+        if let Some(metatable) = maybe_metatable {
+            if let Some(&Value::FunctionDef(ref add_mm)) = metatable.table.as_ref().borrow().get(&Value::String(name)) {
+                return Some(add_mm.clone());
+            }
+        }
+        return None;
+    }
+
+    fn add_vals<'a>(&mut self, t1: &'a Value, t2: &'a Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Number(n1 + n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_add_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__add".into());
+            if let Some(add_metamethod) = maybe_add_metamethod {
+                return self.call_fn(&add_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+            }
+        }
+        return Value::Nil;
     }
     
-    fn subtract_vals(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 - f2);
-                    return Value::Number(f1 - f2);
-                },
-                _ => panic!("Subtraction only applies to numbers")
+    fn subtract_vals(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Number(n1 - n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_sub_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__sub".into());
+            if let Some(sub_metamethod) = maybe_sub_metamethod {
+                return self.call_fn(&sub_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Subtraction only applies to numbers");
         }
+        return Value::Nil;
     }
     
     fn multiply_vals(t1: Value, t2: Value) -> Value {
@@ -552,12 +541,12 @@ impl Interpreter {
                     Token::Plus => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return self.add_vals(t1, t2);
+                        return self.add_vals(&t1, &t2);
                     },
                     Token::Minus => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::subtract_vals(t1, t2);
+                        return self.subtract_vals(t1, t2);
                     },
                     Token::Star => {
                         let t1 = self.eval_expr(&*o1);
