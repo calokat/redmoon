@@ -15,6 +15,8 @@ pub enum Value {
     Table(UserTable),
     // Used when interpreting break statements. Can only be created by the runtime, not the user
     Interrupt,
+    // Used for storing metatables in tables
+    MetaKey,
 
 }
 
@@ -36,7 +38,8 @@ impl Display for Value {
                 }
                 std::fmt::Result::Ok(())
             },
-            Value::Interrupt => panic!("Unprintable value")
+            Value::Interrupt => panic!("Unprintable value"),
+            Value::MetaKey => panic!("Unprintable value")
         }
     }
 }

@@ -1,5 +1,5 @@
-use crate::{Token, Expr, Stmt, Value, table::{Table, UserTable}, native_function::NativeFunction, function::Function};
-use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}, fmt};
+use crate::{Token, Expr, Stmt, Value, table::{UserTable}, native_function::NativeFunction, function::Function};
+use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}};
 #[cfg(target_family = "wasm")]
 use wasm_bindgen::{JsValue, prelude::*};
 
@@ -28,8 +28,37 @@ impl Interpreter {
             }
             None
         })));
+        let setmetatable = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
+            println!("Setting metatable");
+            if args.len() < 2 {
+                println!("Error in setmetatable(): insufficient number of arguments");
+                ()
+            }
+            let table = args[0].clone();
+            let meta = args[1].clone();
+
+            match table {
+                Value::Table(mut t) => {
+                    match meta {
+                        Value::Table(m) => {
+                            t.table.as_ref().borrow_mut().insert(Value::MetaKey, Value::Table(m));
+                        },
+                        _ => {
+                            println!("Error in setmetatable(): both parameters must be tables");
+                            ()
+                        }
+                    }
+                },
+                _ => {
+                    println!("Error in setmetatable(): both parameters must be tables");
+                    ()
+                }
+            }
+            Some(args[0].clone())
+        })));
         let mut _G = UserTable::new();
         _G.table.as_ref().borrow_mut().insert(Value::String("print".into()), print);
+        _G.table.as_ref().borrow_mut().insert(Value::String("setmetatable".into()), setmetatable);
         Self { _G, stack: VecDeque::new() }
     }
 
@@ -72,13 +101,55 @@ impl Interpreter {
         }
     }
 
-    fn add_vals(t1: Value, t2: Value) -> Value {
+    fn add_vals(&mut self, t1: Value, t2: Value) -> Value {
         if let Value::Number(f1) = t1 {
             if let Value::Number(f2) = t2 {
                 println!("{}", f1 + f2);
                 return Value::Number(f1 + f2);
+            } else if let Value::Table(ut) = t2 {
+                let table = ut.table.as_ref().borrow();
+                let metatable_opt = table.get(&Value::MetaKey);
+                if let Some(metatable_val) = metatable_opt {
+                    if let Value::Table(metatable) = metatable_val {
+                        let metatable_ref = metatable.table.as_ref().borrow();
+                        if let Some(add_entry) = metatable_ref.get(&Value::String("__add".into())) {
+                            if let Value::FunctionDef(add_mm) = add_entry {
+                                return self.call_fn(add_mm, &vec![Expr::Literal(t1), Expr::Literal(Value::Table(ut.clone()))]);
+                            } else {
+                                panic!("__add is not a function");
+                            }
+                        } else {
+                            panic!("add metamethod does not exist");
+                        }
+                    } else {
+                        panic!("Addition only applies to numbers");
+                    }
+                } else {
+                    panic!("Addition only applies to numbers");
+                }
             } else {
                 panic!("Addition only applies to numbers");
+            }
+        } else if let Value::Table(ut) = t1.clone() {
+            let table = ut.table.as_ref().borrow();
+            let metatable_opt = table.get(&Value::MetaKey);
+            if let Some(metatable_val) = metatable_opt {
+                if let Value::Table(metatable) = metatable_val {
+                    let metatable_ref = metatable.table.as_ref().borrow();
+                    if let Some(add_entry) = metatable_ref.get(&Value::String("__add".into())) {
+                        if let Value::FunctionDef(add_mm) = add_entry {
+                            return self.call_fn(add_mm, &vec![Expr::Literal(t1), Expr::Literal(t2)]);
+                        } else {
+                            panic!("__add is not a function");
+                        }
+                    } else {
+                        panic!("add metamethod does not exist");
+                    }
+                } else {
+                    panic!("metatable is not a table");
+                }
+            } else {
+                panic!("metatable does not exist");
             }
         } else {
             panic!("Addition only applies to numbers");
@@ -217,7 +288,11 @@ impl Interpreter {
             }, 
             Value::Interrupt => {
                 panic!("Impossible value");
+            },
+            Value::MetaKey => {
+                panic!("Impossible value");
             }
+
         }
     }
     
@@ -477,7 +552,7 @@ impl Interpreter {
                     Token::Plus => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::add_vals(t1, t2);
+                        return self.add_vals(t1, t2);
                     },
                     Token::Minus => {
                         let t1 = self.eval_expr(&*o1);
@@ -611,39 +686,7 @@ impl Interpreter {
                 let func_val = self.eval_expr(&**func_id);
                     match func_val {
                         Value::FunctionDef(fd) => {
-                            let mut args_decls: Vec<Stmt> = vec![];
-                            let mut arg_counter = 0;
-                            for param in fd.get_params() {
-                                if let Some(arg) = vars.get(arg_counter) {
-                                    args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![arg.clone()])));
-                                } else {
-                                    args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(Value::Nil)])));
-                                }
-                                arg_counter += 1;
-                            }
-                            let func_body = fd.get_body();
-                            for c in fd.get_closure().clone() {
-                                self.push_custom_env(c.clone());
-                            }
-                            for decl in args_decls.into_iter() {
-                                if let Err(e) = self.eval_stmt(&decl) {
-                                    panic!("Error declaring args: {e}");
-                                }
-                            }
-                            let func_eval = self.eval_stmt(&func_body);
-                            if let Err(func_body_err) = func_eval {
-                                println!("{func_body_err}");
-                            } else if let Ok(None) = func_eval {
-                                // Do nothing
-                            } else if let Ok(Some(func_ret)) = func_eval {
-                                if let Expr::Literal(Value::Interrupt) = func_ret {
-                                    panic!("Break outside loop");
-                                }
-                                let ret_val = self.eval_expr(&func_ret);
-                                self.pop_env();
-                                return ret_val;
-                            }
-                            self.pop_env();
+                            return self.call_fn(&fd, vars);
                         },
                         Value::NativeFunctionDef(nf) => {
                             let mut args: Vec<Value> = vec![];
@@ -686,5 +729,42 @@ impl Interpreter {
                 return Value::Table(user_table);
             },
         }
+    }
+
+    fn call_fn(&mut self, fd: &Function, vars: &Vec<Expr>) -> Value {
+        let mut args_decls: Vec<Stmt> = vec![];
+        let mut arg_counter = 0;
+        for param in fd.get_params() {
+            if let Some(arg) = vars.get(arg_counter) {
+                args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![arg.clone()])));
+            } else {
+                args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(Value::Nil)])));
+            }
+            arg_counter += 1;
+        }
+        let func_body = fd.get_body();
+        for c in fd.get_closure().clone() {
+            self.push_custom_env(c.clone());
+        }
+        for decl in args_decls.into_iter() {
+            if let Err(e) = self.eval_stmt(&decl) {
+                panic!("Error declaring args: {e}");
+            }
+        }
+        let func_eval = self.eval_stmt(&func_body);
+        if let Err(func_body_err) = func_eval {
+            println!("{func_body_err}");
+        } else if let Ok(None) = func_eval {
+            // Do nothing
+        } else if let Ok(Some(func_ret)) = func_eval {
+            if let Expr::Literal(Value::Interrupt) = func_ret {
+                panic!("Break outside loop");
+            }
+            let ret_val = self.eval_expr(&func_ret);
+            self.pop_env();
+            return ret_val;
+        }
+        self.pop_env();
+        return Value::Nil;
     }
 }
