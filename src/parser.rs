@@ -33,6 +33,8 @@ impl Parser {
             return Ok(Expr::Var(s));
         } else if Some(Token::Function) == self.current_token() {
             return self.function_def();
+        } else if Some(Token::LeftCurlyBrace) == self.current_token() {
+            return self.table();
         }
         return Err("Unknown token".into());
     }
@@ -320,7 +322,7 @@ impl Parser {
     }
 
     fn and(&mut self) -> Result<Expr, String> {
-        let mut expr = self.table()?;
+        let mut expr = self.equality()?;
         while self.check_token_type(Token::And) {
             expr = Expr::Binary(Box::new(expr), Token::And, Box::new(self.or()?));
         }
