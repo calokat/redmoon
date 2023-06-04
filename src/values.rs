@@ -1,6 +1,6 @@
 use ordered_float::OrderedFloat;
 use crate::function::Function;
-use crate::table::UserTable;
+use crate::gc::gc_key::GcKey;
 use crate::native_function::NativeFunction;
 use std::fmt::Display;
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -12,7 +12,7 @@ pub enum Value {
     Nil,
     FunctionDef(Function),
     NativeFunctionDef(NativeFunction),
-    Table(UserTable),
+    Table(GcKey),
     // Used when interpreting break statements. Can only be created by the runtime, not the user
     Interrupt,
     // Used for storing metatables in tables

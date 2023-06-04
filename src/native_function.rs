@@ -2,7 +2,7 @@ use std::rc::Rc;
 use core::hash::Hash;
 use crate::{Interpreter, Value};
 
-pub type NativeFunctionImpl = dyn Fn(&Interpreter, &mut Vec<Value>) -> Option<Value>;
+pub type NativeFunctionImpl = dyn Fn(&mut Interpreter, &mut Vec<Value>) -> Option<Value>;
 
 pub struct NativeFunction {
     nfi: Rc<Box<NativeFunctionImpl>>
@@ -35,7 +35,7 @@ impl NativeFunction {
     pub fn new(closure: Box<NativeFunctionImpl>) -> Self {
         Self { nfi: Rc::new(closure) }
     }
-    pub fn call(&self, interp: &Interpreter, args: &mut Vec<Value>) -> Option<Value> {
+    pub fn call(&self, interp: &mut Interpreter, args: &mut Vec<Value>) -> Option<Value> {
         self.nfi.as_ref().as_ref()(interp, args)
     }
 }

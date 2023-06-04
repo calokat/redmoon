@@ -1,5 +1,5 @@
-use crate::{Token, Expr, Stmt, Value, table::{UserTable}, native_function::NativeFunction, function::Function};
-use std::{collections::{VecDeque}, borrow::{BorrowMut, Borrow}};
+use crate::{Token, Expr, Stmt, Value, table::{UserTable, Table}, native_function::NativeFunction, function::Function, gc::gc_store::GcStore, gc::{gc_values::GcValue, gc_key::GcKey}};
+use std::{collections::{VecDeque}, borrow::{BorrowMut}};
 #[cfg(target_family = "wasm")]
 use wasm_bindgen::{JsValue, prelude::*};
 
@@ -12,6 +12,7 @@ extern "C" {
 pub struct Interpreter {
     _G: UserTable,
     stack: VecDeque<UserTable>,
+    gc: GcStore
 }
 
 impl Interpreter {
@@ -29,7 +30,6 @@ impl Interpreter {
             None
         })));
         let setmetatable = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
-            println!("Setting metatable");
             if args.len() < 2 {
                 println!("Error in setmetatable(): insufficient number of arguments");
                 ()
@@ -39,9 +39,12 @@ impl Interpreter {
 
             match table {
                 Value::Table(mut t) => {
+                    let gc_table_value = interp.gc.modify_value(&t).unwrap();
                     match meta {
                         Value::Table(m) => {
-                            t.table.as_ref().borrow_mut().insert(Value::MetaKey, Value::Table(m));
+                            if let GcValue::Table(gc_table) = gc_table_value {
+                                gc_table.insert(Value::MetaKey, Value::Table(m));
+                            }
                         },
                         _ => {
                             println!("Error in setmetatable(): both parameters must be tables");
@@ -59,7 +62,7 @@ impl Interpreter {
         let mut _G = UserTable::new();
         _G.table.as_ref().borrow_mut().insert(Value::String("print".into()), print);
         _G.table.as_ref().borrow_mut().insert(Value::String("setmetatable".into()), setmetatable);
-        Self { _G, stack: VecDeque::new() }
+        Self { _G, stack: VecDeque::new(), gc: GcStore::new() }
     }
 
     fn push_env(&mut self) {
@@ -110,27 +113,31 @@ impl Interpreter {
         return None;
     }
 
-    fn which_value_is_table<'a>(v1: &'a Value, v2: &'a Value) -> Option<&'a UserTable> {
+    fn which_value_is_table<'a>(&self, v1: &'a Value, v2: &'a Value) -> Option<&'a Value> {
         if let Value::Table(table1) = v1 {
-            return Some(table1);                
+            if let Some(GcValue::Table(_)) = self.gc.get_value(table1) {
+                return Some(v1);
+            }
+            return None;
         } else if let Value::Table(table2) = v2 {
-            return Some(table2);
+            if let Some(GcValue::Table(_)) = self.gc.get_value(table2) {
+                return Some(v2);
+            }
+            return None;
         }
         None
     }
 
-    fn get_metatable<'a>(t: &'a UserTable) -> Option<UserTable> {
-        if let Some(Value::Table(ref ut)) = t.table.as_ref().borrow().get(&Value::MetaKey) {
-            return Some(ut.clone());
+    fn get_table(&self, key: &GcKey) -> Option<&Table> {
+        if let Some(GcValue::Table(t)) = self.gc.get_value(&key) {
+            return Some(t);
         }
-        return None;
+        None
     }
 
-    fn get_metamethod(maybe_metatable: Option<UserTable>, name: String) -> Option<Function> {
-        if let Some(metatable) = maybe_metatable {
-            if let Some(&Value::FunctionDef(ref add_mm)) = metatable.table.as_ref().borrow().get(&Value::String(name)) {
-                return Some(add_mm.clone());
-            }
+    fn get_metatable<'a>(t: &'a Table) -> Option<GcKey> {
+        if let Some(Value::Table(ref ut)) = t.get(&Value::MetaKey) {
+            return Some(ut.clone());
         }
         return None;
     }
@@ -138,10 +145,15 @@ impl Interpreter {
     fn add_vals<'a>(&mut self, t1: &'a Value, t2: &'a Value) -> Value {
         if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
             return Value::Number(n1 + n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_add_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__add".into());
-            if let Some(add_metamethod) = maybe_add_metamethod {
-                return self.call_fn(&add_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__add".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }    
+                }
             }
         }
         return Value::Nil;
@@ -150,10 +162,15 @@ impl Interpreter {
     fn subtract_vals(&mut self, t1: Value, t2: Value) -> Value {
         if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
             return Value::Number(n1 - n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_sub_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__sub".into());
-            if let Some(sub_metamethod) = maybe_sub_metamethod {
-                return self.call_fn(&sub_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__sub".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }    
+                }
             }
         }
         return Value::Nil;
@@ -162,10 +179,15 @@ impl Interpreter {
     fn multiply_vals(&mut self, t1: Value, t2: Value) -> Value {
         if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
             return Value::Number(n1 * n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_mul_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__mul".into());
-            if let Some(mul_metamethod) = maybe_mul_metamethod {
-                return self.call_fn(&mul_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__mul".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }    
+                }
             }
         }
         return Value::Nil;
@@ -174,10 +196,15 @@ impl Interpreter {
     fn divide_vals(&mut self, t1: Value, t2: Value) -> Value {
         if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
             return Value::Number(n1 / n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_div_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__div".into());
-            if let Some(div_metamethod) = maybe_div_metamethod {
-                return self.call_fn(&div_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__div".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }    
+                }
             }
         }
         return Value::Nil;
@@ -186,10 +213,15 @@ impl Interpreter {
     fn less_than_or_equal(&mut self, t1: Value, t2: Value) -> Value {
         if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
             return Value::Boolean(n1 <= n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_le_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__le".into());
-            if let Some(le_metamethod) = maybe_le_metamethod {
-                return self.call_fn(&le_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__le".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }    
+                }
             }
         }
         return Value::Nil;
@@ -198,10 +230,15 @@ impl Interpreter {
     fn less_than(&mut self, t1: Value, t2: Value) -> Value {
         if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
             return Value::Boolean(n1 < n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_lt_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__lt".into());
-            if let Some(lt_metamethod) = maybe_lt_metamethod {
-                return self.call_fn(&lt_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__lt".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }    
+                }
             }
         }
         return Value::Nil;
@@ -224,12 +261,12 @@ impl Interpreter {
         if let Value::MetaKey = t2 {
             panic!("Impossible value");
         }
-        if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_eq_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__eq".into());
-            if let Some(maybe_eq_metamethod) = maybe_eq_metamethod {
-                return self.call_fn(&maybe_eq_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
-            }
-        }
+        // if let Some(table) = self.which_value_is_table(&t1, &t2) {
+        //     let maybe_eq_metamethod: Option<Function> = Self::get_metamethod(self.get_table(&Self::get_metatable(table).unwrap()), "__eq".into());
+        //     if let Some(maybe_eq_metamethod) = maybe_eq_metamethod {
+        //         return self.call_fn(&maybe_eq_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        //     }
+        // }
         match t1 {
             Value::Number(n1) => {
                 match t2 {
@@ -287,26 +324,26 @@ impl Interpreter {
     }
     
     fn greater_than_or_equal(&mut self, t1: Value, t2: Value) -> Value {
-        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
-            return Value::Boolean(n1 >= n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__ge".into());
-            if let Some(maybe_metamethod) = maybe_metamethod {
-                return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
-            }
-        }
+        // if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+        //     return Value::Boolean(n1 >= n2);
+        // } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+        //     let maybe_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__ge".into());
+        //     if let Some(maybe_metamethod) = maybe_metamethod {
+        //         return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        //     }
+        // }
         return Value::Nil;
     }
     
     fn greater_than(&mut self, t1: Value, t2: Value) -> Value {
-        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
-            return Value::Boolean(n1 > n2);
-        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
-            let maybe_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__gt".into());
-            if let Some(maybe_metamethod) = maybe_metamethod {
-                return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
-            }
-        }
+        // if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+        //     return Value::Boolean(n1 > n2);
+        // } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+        //     let maybe_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__gt".into());
+        //     if let Some(maybe_metamethod) = maybe_metamethod {
+        //         return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+        //     }
+        // }
         return Value::Nil;
     }
 
@@ -381,7 +418,9 @@ impl Interpreter {
                             let key = self.eval_expr(field.as_ref());
                             let resolved_accessors = self.eval_expr(accessors.as_ref());
                             if let Value::Table(accessed_table) = resolved_accessors {
-                                accessed_table.table.as_ref().borrow_mut().insert(key, val_vec[val_counter].clone());
+                                if let Some(GcValue::Table(accessed_table)) = self.gc.modify_value(&accessed_table) {
+                                    accessed_table.insert(key, val_vec[val_counter].clone());                                    
+                                }
                             }
                         }
                         if let Some(Value::FunctionDef(fd)) = val_vec.get_mut(val_counter) {
@@ -699,7 +738,8 @@ impl Interpreter {
             Expr::Accessor(bt, ba) => {
                 if let Value::Table(ut) = self.eval_expr(bt.as_ref()) {
                     let accessor = self.eval_expr(ba.as_ref());
-                    if let Some(accessed_value) = ut.table.as_ref().borrow().get(&accessor) {
+                    let table = self.get_table(&ut).unwrap();
+                    if let Some(accessed_value) = table.get(&accessor) {
                         return accessed_value.clone();
                     }
                 } else if let Expr::Accessor(_, _) = bt.as_ref() {
@@ -708,11 +748,13 @@ impl Interpreter {
                 Value::Nil
             },
             Expr::FieldList(fl) => {
-                let user_table = crate::table::UserTable::new();
+                let mut user_table = crate::table::Table::new();
                 for (key, value) in fl.into_iter() {
-                    user_table.table.as_ref().borrow_mut().insert(self.eval_expr(&*key), self.eval_expr(&*value));
+                    user_table.insert(self.eval_expr(&*key), self.eval_expr(&*value));
                 }
-                return Value::Table(user_table);
+                let gc_key = GcKey::new();
+                self.gc.store(gc_key.clone(), GcValue::Table(user_table));
+                return Value::Table(gc_key);
             },
         }
     }

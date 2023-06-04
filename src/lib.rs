@@ -8,6 +8,7 @@ pub mod values;
 pub mod function;
 pub mod table;
 pub mod native_function;
+pub mod gc;
 
 use interpreter::Interpreter;
 use tokens::Token;
