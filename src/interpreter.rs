@@ -159,60 +159,52 @@ impl Interpreter {
         return Value::Nil;
     }
     
-    fn multiply_vals(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 * f2);
-                    return Value::Number(f1 * f2);
-                },
-                _ => panic!("Multiplication only applies to numbers")
+    fn multiply_vals(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Number(n1 * n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_mul_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__mul".into());
+            if let Some(mul_metamethod) = maybe_mul_metamethod {
+                return self.call_fn(&mul_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Multiplication only applies to numbers");
         }
+        return Value::Nil;
     }
     
-    fn divide_vals(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 / f2);
-                    return Value::Number(f1 / f2);
-                },
-                _ => panic!("Division only applies to numbers")
+    fn divide_vals(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Number(n1 / n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_div_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__div".into());
+            if let Some(div_metamethod) = maybe_div_metamethod {
+                return self.call_fn(&div_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Division only applies to numbers");
         }
+        return Value::Nil;
     }
     
-    fn less_than_or_equal(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 <= f2);
-                    Value::Boolean(f1 <= f2)
-                },
-                _ => panic!("Comparison only applies to numbers")
+    fn less_than_or_equal(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Boolean(n1 <= n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_le_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__le".into());
+            if let Some(le_metamethod) = maybe_le_metamethod {
+                return self.call_fn(&le_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Comparison only applies to numbers");
         }
+        return Value::Nil;
     }
     
-    fn less_than(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 < f2);
-                    return Value::Boolean(f1 < f2);
-                },
-                _ => panic!("Comparison only applies to numbers")
+    fn less_than(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Boolean(n1 < n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_lt_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__lt".into());
+            if let Some(lt_metamethod) = maybe_lt_metamethod {
+                return self.call_fn(&lt_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Comparison only applies to numbers");
         }
+        return Value::Nil;
     }
 
     fn value_length(v: &Value) -> Option<Value> {
@@ -225,9 +217,18 @@ impl Interpreter {
         }
     }
     
-    fn equals(t1: Value, t2: Value) -> Value {
+    fn equals(&mut self, t1: Value, t2: Value) -> Value {
         if let Value::Interrupt = t2 {
             panic!("Impossible value");
+        }
+        if let Value::MetaKey = t2 {
+            panic!("Impossible value");
+        }
+        if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_eq_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__eq".into());
+            if let Some(maybe_eq_metamethod) = maybe_eq_metamethod {
+                return self.call_fn(&maybe_eq_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+            }
         }
         match t1 {
             Value::Number(n1) => {
@@ -285,32 +286,28 @@ impl Interpreter {
         }
     }
     
-    fn greater_than_or_equal(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 >= f2);
-                    Value::Boolean(f1 >= f2)
-                },
-                _ => panic!("Comparison only applies to numbers")
+    fn greater_than_or_equal(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Boolean(n1 >= n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__ge".into());
+            if let Some(maybe_metamethod) = maybe_metamethod {
+                return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Comparison only applies to numbers");
         }
+        return Value::Nil;
     }
     
-    fn greater_than(t1: Value, t2: Value) -> Value {
-        if let Value::Number(f1) = t1 {
-            match t2 {
-                Value::Number(f2) => {
-                    println!("{}", f1 > f2);
-                    Value::Boolean(f1 > f2)
-                },
-                _ => panic!("Comparison only applies to numbers")
+    fn greater_than(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Boolean(n1 > n2);
+        } else if let Some(table) = Self::which_value_is_table(&t1, &t2) {
+            let maybe_metamethod: Option<Function> = Self::get_metamethod(Self::get_metatable(table), "__gt".into());
+            if let Some(maybe_metamethod) = maybe_metamethod {
+                return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
             }
-        } else {
-            panic!("Comparison only applies to numbers");
         }
+        return Value::Nil;
     }
 
     fn is_truthy(&self, v: &Value) -> bool {
@@ -551,37 +548,37 @@ impl Interpreter {
                     Token::Star => {
                         let t1 = self.eval_expr(&*o1);
                         let t3 = self.eval_expr(&*o2);
-                        return Self::multiply_vals(t1, t3);
+                        return self.multiply_vals(t1, t3);
                     },
                     Token::ForwardSlash => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::divide_vals(t1, t2);
+                        return self.divide_vals(t1, t2);
                     },
                     Token::LessThanOrEqual => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::less_than_or_equal(t1, t2);
+                        return self.less_than_or_equal(t1, t2);
                     },
                     Token::LessThan => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::less_than(t1, t2);
+                        return self.less_than(t1, t2);
                     },
                     Token::Equals => {
                         let t1 = self.eval_expr(*&o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::equals(t1, t2);
+                        return self.equals(t1, t2);
                     },
                     Token::GreaterThanOrEqual => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::greater_than_or_equal(t1, t2);
+                        return self.greater_than_or_equal(t1, t2);
                     },
                     Token::GreaterThan => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
-                        return Self::greater_than(t1, t2);
+                        return self.greater_than(t1, t2);
                     },
                     Token::Concatenation => {
                         let t1 = self.eval_expr(&*o1);
