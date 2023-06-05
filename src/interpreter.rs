@@ -59,9 +59,17 @@ impl Interpreter {
             }
             Some(args[0].clone())
         })));
+
+        let collectgarbage = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
+            let mut stack = interp.get_stack().clone();
+            stack.push_front(interp._G.clone());
+            interp.gc.collect_garbage(&stack);
+            return Some(Value::Nil);
+        })));
         let mut _G = UserTable::new();
         _G.table.as_ref().borrow_mut().insert(Value::String("print".into()), print);
         _G.table.as_ref().borrow_mut().insert(Value::String("setmetatable".into()), setmetatable);
+        _G.table.as_ref().borrow_mut().insert(Value::String("collectgarbage".into()), collectgarbage);
         Self { _G, stack: VecDeque::new(), gc: GcStore::new() }
     }
 
@@ -794,5 +802,9 @@ impl Interpreter {
         }
         self.pop_env();
         return Value::Nil;
+    }
+
+    pub fn get_stack(&self) -> &VecDeque<UserTable> {
+        &self.stack
     }
 }
