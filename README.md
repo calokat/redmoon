@@ -6,13 +6,17 @@ A Rust implementation of Lua. **NOT PRODUCTION READY**. Mostly an excuse to hack
 
 That would be nice. I am thankfully at a point where it is easier to discuss what is missing versus what is here. However, the missing pieces are a pretty big deal:
 
-- Garbage collection: This can be very hard to implement with Rust, since Rust has very strict rules regarding ownership. I have a solution in the works, but I won't know for sure until I start to work on it (which will likely not be for a while).
+- Garbage collection: The `collectgarbage` function is implemented. Now I just have to figure out when to call it.
 
 - Bytecode generation: Redmoon's current interpreter has no bytecode generation; Instead it interprets the syntax tree of the program. I am eager to start work on using proper bytecode. There's always more to learn!
 
 - Goto statements and labels: This is a side effect of not using bytecode, meaning this feature will be very hard to implement as is. I plan to wait on adding goto's until I have a bytecode-based virtual machine.
 
-- For loops: This one is kind of embarrassing. I should have this completed in the coming days or weeks, and hopefully I can delete this line and no one will know it was missing.
+- Generic `for` loops: Numeric for loops have been implemented at the time of writing.
+
+- All operations (and all metamethods): I have the most common binary operators implemented (addition, division, comparison, etc.) but a few are still missing i.e. bitwise shifting. Metamethods do exist for most of the operators, though that is a slightly less complete list.
+
+- Standard library: The `print`, `setmetatable`, and `collectgarbage` functions are there, but that's it.
 
 ## Inspiration
 
