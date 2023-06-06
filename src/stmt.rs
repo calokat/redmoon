@@ -11,6 +11,7 @@ pub enum Stmt {
     IfStmt(Expr, /* conditional */ Box<Stmt> /* body */, Box<Stmt> /* else stmts */),
     WhileLoop(Expr, /* conditional */ Box<Stmt> /* body */),
     RepeatUntilLoop(Box<Stmt>, Expr),
+    NumericForLoop(Expr, /* control variable */ Expr, /* control value expression */ Expr, /* limit */ Expr, /* step */ Vec<Stmt> /* body */),
     Return(Expr),
     // Implementation detail, not visible to users
     Chunk(Vec<Stmt>),

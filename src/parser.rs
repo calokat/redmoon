@@ -254,6 +254,22 @@ impl Parser {
         return Ok(Expr::Exprlist(expr_vec));
     }
 
+    fn numeric_for_loop(&mut self) -> Result<Stmt, String> {
+        let control_var = Expr::Exprlist(vec![self.primary()?]);
+        assert!(self.check_token_type(Token::Assign), "Missing \"=\" when assigning to control var");
+        let control_value = self.expression()?;
+        assert!(self.check_token_type(Token::Comma), "Numeric for loop needs proper separation of fields");
+        let limit = self.expression()?;
+        let step = if self.check_token_type(Token::Comma) {
+            self.expression()?
+        } else {
+            Expr::Literal(Value::Number(1.0f32.into()))
+        };
+        assert!(self.check_token_type(Token::Do), "For loop missing \"do\" keyword");
+        let body = self.do_block()?;
+        return Ok(Stmt::NumericForLoop(control_var, control_value, limit, step, body));
+    }
+
     fn assignment(&mut self) -> Result<Stmt, String> {
         if self.current_token() == Some(Token::Function) {
             let func = self.function_def()?;
@@ -345,6 +361,8 @@ impl Parser {
             return Ok(Stmt::Return(self.expr_list()?));
         } else if self.check_token_type(Token::Break) {
             return Ok(Stmt::Break);
+        } else if self.check_token_type(Token::For) {
+            return self.numeric_for_loop();
         }
         return self.assignment();
     }

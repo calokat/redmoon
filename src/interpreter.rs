@@ -1,5 +1,6 @@
 use crate::{Token, Expr, Stmt, Value, table::{UserTable, Table}, native_function::NativeFunction, function::Function, gc::gc_store::GcStore, gc::{gc_values::GcValue, gc_key::GcKey}};
 use std::{collections::{VecDeque}, borrow::{BorrowMut}};
+use ordered_float::OrderedFloat;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen::{JsValue, prelude::*};
 
@@ -557,6 +558,38 @@ impl Interpreter {
                 }
                 Ok(None)
             },
+            Stmt::NumericForLoop(control_var, control_value, limit, step, body) => {
+                let step = self.eval_expr(step);
+                if let Value::Number(step_float) = step {
+                    if step_float == OrderedFloat(0.0) {
+                        panic!("In a numeric for loop, \"step\" cannot be 0");
+                    }
+                    let control_value = self.eval_expr(control_value);
+                    if let Value::Number(mut control_float) = control_value {
+                        let limit = self.eval_expr(limit);
+                        if let Value::Number(limit_float) = limit {
+                            while (step_float > OrderedFloat(0.0) && control_float <= limit_float) ||
+                            (step_float < OrderedFloat(0.0) && control_float >= limit_float) {
+                                self.push_env();
+                                let control_stmt = Stmt::LocalAssignment(control_var.clone(), Expr::Exprlist(vec![Expr::Literal(Value::Number(control_float))]));
+                                self.eval_stmt(&control_stmt)?;
+                                for s in body {
+                                    self.eval_stmt(s)?;
+                                }
+                                self.pop_env();
+                                control_float += step_float;
+                            }
+                            return Ok(None);
+                        } else {
+                            panic!("\"limit\" is required to be a number");
+                        }
+                    } else {
+                        panic!("\"control\" is required to be a number")
+                    }
+                } else {
+                    panic!("\"step\" is required to be a number")
+                }
+            }
             Stmt::Return(ret) => {
                 Ok(Some(ret.clone()))
             },
