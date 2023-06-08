@@ -17,6 +17,8 @@ pub enum Value {
     Interrupt,
     // Used for storing metatables in tables
     MetaKey,
+    Varargs(Vec<Value>),
+    VarargsIdentifier,
 
 }
 
@@ -39,7 +41,16 @@ impl Display for Value {
                 std::fmt::Result::Ok(())
             },
             Value::Interrupt => panic!("Unprintable value"),
-            Value::MetaKey => panic!("Unprintable value")
+            Value::MetaKey => panic!("Unprintable value"),
+            Value::Varargs(va) => {
+                for v in va.iter() {
+                    if let std::fmt::Result::Err(e) = write!(f, "{v}\t") {
+                        return std::fmt::Result::Err(e);
+                    }
+                }
+                std::fmt::Result::Ok(())
+            },
+            Value::VarargsIdentifier => write!(f, "<varargs>"),
         }
     }
 }

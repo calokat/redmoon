@@ -355,6 +355,16 @@ impl Interpreter {
             },
             Value::MetaKey => {
                 panic!("Impossible value");
+            },
+            Value::Varargs(_) => {
+                return if let Value::Varargs(_) = t2 {
+                    Value::Boolean(true)
+                } else {
+                    Value::Boolean(false)
+                }
+            },
+            Value::VarargsIdentifier => {
+                Value::Boolean(t2 == Value::VarargsIdentifier)
             }
 
         }
@@ -437,7 +447,15 @@ impl Interpreter {
                                 val_vec.push(v);
                             }
                         } else {
-                            val_vec.push(e_res);
+                            if let Value::VarargsIdentifier = e_res {
+                               if let Some(Value::Varargs(varargs)) = self.get_current_stack_env().table.as_ref().borrow().get(&Value::VarargsIdentifier) {
+                                    for va in varargs {
+                                        val_vec.push(va.clone());
+                                    }
+                               }
+                            } else {
+                                val_vec.push(e_res);
+                            }
                         }
                     }
                 }
@@ -474,7 +492,16 @@ impl Interpreter {
                 let mut val_vec = vec![];
                 if let Expr::Exprlist(el) = val {
                     for e in el.into_iter() {
-                        val_vec.push(self.eval_expr(&e));
+                        let val_res = self.eval_expr(&e);
+                        if let Value::VarargsIdentifier = val_res {
+                            if let Some(Value::Varargs(varargs)) = self.get_current_stack_env().table.as_ref().borrow().get(&Value::VarargsIdentifier) {
+                                for va in varargs {
+                                    val_vec.push(va.clone());
+                                }
+                            }
+                        } else {
+                            val_vec.push(val_res);                            
+                        }
                     }
                 }
                 if let Expr::Exprlist(var_list) = var {
@@ -490,6 +517,12 @@ impl Interpreter {
                         } else {
                             return Err("Cannot assign to this".into());
                         }
+                    }
+                } else if &Expr::Literal(Value::VarargsIdentifier) == var {
+                    // varargs initialization case
+                    if let Expr::Literal(Value::Varargs(varargs)) = val {
+                        println!("Almost there");
+                        self.get_current_stack_env().table.as_ref().borrow_mut().insert(Value::VarargsIdentifier, Value::Varargs(varargs.clone()));                        
                     }
                 } else {
                     return Err("Cannot assign to this".into());
@@ -825,6 +858,9 @@ impl Interpreter {
                 self.gc.store(gc_key.clone(), GcValue::Table(user_table));
                 return Value::Table(gc_key);
             },
+            Expr::Varargs => {
+                return Value::VarargsIdentifier
+            }
         }
     }
 
@@ -841,6 +877,15 @@ impl Interpreter {
         let mut args_decls: Vec<Stmt> = vec![];
         let mut arg_counter = 0;
         for param in fd.get_params() {
+            if param == &Expr::Varargs {
+                let mut vararg_values: Vec<Value> = vec![];
+                for a in &arg_values[arg_counter..] {
+                    println!("An arg is being passed");
+                    vararg_values.push(a.clone());
+                }
+                args_decls.push(Stmt::LocalAssignment(Expr::Literal(Value::VarargsIdentifier), Expr::Literal(Value::Varargs(vararg_values))));
+                break;
+            }
             args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(arg_values.get(arg_counter).unwrap_or_else(|| &Value::Nil).clone())])));
             arg_counter += 1;
         }

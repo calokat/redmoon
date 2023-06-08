@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use ordered_float::OrderedFloat;
 
-use crate::{Token, Expr, Stmt, function::Function, values::Value, table::UserTable};
+use crate::{Token, Expr, Stmt, function::Function, values::Value};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -35,6 +35,9 @@ impl Parser {
             return self.function_def();
         } else if Some(Token::LeftCurlyBrace) == self.current_token() {
             return self.table();
+        } else if self.check_token_type(Token::Varargs) {
+            self.advance();
+            return Ok(Expr::Varargs);
         }
         return Err("Unknown token".into());
     }
@@ -50,7 +53,7 @@ impl Parser {
         let params ;
         
         if self.current_token() != Some(Token::RightParens) {
-            params = self.expr_list()?
+            params = self.expr_list()?;
         } else {
             params = Expr::Exprlist(vec![]);
         }
@@ -248,8 +251,17 @@ impl Parser {
 
     fn expr_list(&mut self) -> Result<Expr, String> {
         let mut expr_vec = vec![self.expression()?];
+        let mut found_varargs = false;
         while self.check_token_type(Token::Comma) {
-            expr_vec.push(self.expression()?);
+            if found_varargs {
+                panic!("Varargs (...) must only appear once at the end of the parameter list");
+            }
+            if self.check_token_type(Token::Varargs) {
+                expr_vec.push(Expr::Varargs);
+                found_varargs = true;
+            } else {
+                expr_vec.push(self.expression()?);                
+            }
         }
         return Ok(Expr::Exprlist(expr_vec));
     }

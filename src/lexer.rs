@@ -105,7 +105,7 @@ impl<'a> Lexer<'a> {
                         self.advance();
                         self.advance();
                         if self.current_char() == '.' {
-                            panic!("Varargs are coming soon!");
+                            ret.push(Token::Varargs);
                         } else {
                             ret.push(Token::Concatenation);
                         }
