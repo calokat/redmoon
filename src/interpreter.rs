@@ -829,14 +829,19 @@ impl Interpreter {
     }
 
     fn call_fn(&mut self, fd: &Function, vars: &Vec<Expr>) -> Value {
+        let mut arg_values: Vec<Value> = vec![];
+        for v in vars {
+            let arg_value = self.eval_expr(v);
+            if let Value::ValList(mut vl) = arg_value {
+                arg_values.append(&mut vl);
+            } else {
+                arg_values.push(arg_value);
+            }
+        }
         let mut args_decls: Vec<Stmt> = vec![];
         let mut arg_counter = 0;
         for param in fd.get_params() {
-            if let Some(arg) = vars.get(arg_counter) {
-                args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![arg.clone()])));
-            } else {
-                args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(Value::Nil)])));
-            }
+            args_decls.push(Stmt::LocalAssignment(Expr::Exprlist(vec![param.clone()]), Expr::Exprlist(vec![Expr::Literal(arg_values.get(arg_counter).unwrap_or_else(|| &Value::Nil).clone())])));
             arg_counter += 1;
         }
         let func_body = fd.get_body();
