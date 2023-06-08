@@ -61,16 +61,44 @@ impl Interpreter {
             Some(args[0].clone())
         })));
 
+        let getmetatable = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
+            if let Some(Value::Table(t)) = args.get(0) {
+                if let Some(GcValue::Table(gc_table)) = interp.gc.get_value(t) {
+                    return gc_table.get(&Value::MetaKey).cloned();
+                }
+            }
+            return None;
+        })));
+
         let collectgarbage = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
             let mut stack = interp.get_stack().clone();
             stack.push_front(interp._G.clone());
             interp.gc.collect_garbage(&stack);
             return Some(Value::Nil);
         })));
+
+        let assert = Value::NativeFunctionDef(NativeFunction::new(Box::new(|interp, args| {
+            if let Some(v) = args.get(0) {
+                if interp.is_truthy(v) {
+                    return Some(Value::ValList(args.to_vec()));
+                } else {
+                    let error_msg = if let Some(em) = args.get(1) {
+                        em.clone()
+                    } else {
+                        Value::String("Assertion failed!".into())
+                    };
+
+                    panic!("{}", &error_msg);
+                }
+            }
+            panic!("assert(): Requires at least 1 argument");
+        })));
         let mut _G = UserTable::new();
         _G.table.as_ref().borrow_mut().insert(Value::String("print".into()), print);
         _G.table.as_ref().borrow_mut().insert(Value::String("setmetatable".into()), setmetatable);
+        _G.table.as_ref().borrow_mut().insert(Value::String("getmetatable".into()), getmetatable);
         _G.table.as_ref().borrow_mut().insert(Value::String("collectgarbage".into()), collectgarbage);
+        _G.table.as_ref().borrow_mut().insert(Value::String("assert".into()), assert);
         Self { _G, stack: VecDeque::new(), gc: GcStore::new() }
     }
 
