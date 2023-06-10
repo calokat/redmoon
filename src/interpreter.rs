@@ -35,16 +35,16 @@ impl Interpreter {
                 println!("Error in setmetatable(): insufficient number of arguments");
                 ()
             }
-            let table = args[0].clone();
-            let meta = args[1].clone();
+            let table = &args[0];
+            let meta = &args[1];
 
             match table {
-                Value::Table(mut t) => {
+                Value::Table(ref t) => {
                     let gc_table_value = interp.gc.modify_value(&t).unwrap();
                     match meta {
                         Value::Table(m) => {
                             if let GcValue::Table(gc_table) = gc_table_value {
-                                gc_table.insert(Value::MetaKey, Value::Table(m));
+                                gc_table.insert(Value::MetaKey, Value::Table(m.clone()));
                             }
                         },
                         _ => {
@@ -82,13 +82,14 @@ impl Interpreter {
                 if interp.is_truthy(v) {
                     return Some(Value::ValList(args.to_vec()));
                 } else {
+                    let default_error_msg = Value::String("Assertion failed!".into());
                     let error_msg = if let Some(em) = args.get(1) {
-                        em.clone()
+                        em
                     } else {
-                        Value::String("Assertion failed!".into())
+                        &default_error_msg
                     };
 
-                    panic!("{}", &error_msg);
+                    panic!("{}", error_msg);
                 }
             }
             panic!("assert(): Requires at least 1 argument");
@@ -281,11 +282,18 @@ impl Interpreter {
         return Value::Nil;
     }
 
-    fn value_length(v: &Value) -> Option<Value> {
+    fn value_length(&self, v: &Value) -> Option<Value> {
         match v {
             Value::String(s) => {
                 Some(Value::Number(ordered_float::OrderedFloat(s.len() as f32)))
             },
+            Value::Table(key) => {
+                let table = self.gc.get_value(key);
+                if let Some(GcValue::Table(table)) = table {
+                    return Some(Value::Number(OrderedFloat(table.len() as f32)));
+                }
+                None
+            }
             // TODO: Add support for table lengths
             _ => None
         }
@@ -391,6 +399,23 @@ impl Interpreter {
         //         return self.call_fn(&maybe_metamethod, &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
         //     }
         // }
+        return Value::Nil;
+    }
+
+    fn modulo_vals(&mut self, t1: Value, t2: Value) -> Value {
+        if let Some((n1, n2)) = Self::are_both_values_numbers(&t1, &t2) {
+            return Value::Number(n1 % n2);
+        } else if let Some(Value::Table(table)) = self.which_value_is_table(&t1, &t2) {
+            if let Some(table) = self.get_table(table) {
+                if let Some(key) = Self::get_metatable(table) {
+                    if let Some(meta_table) = self.get_table(&key) {
+                        if let Some(Value::FunctionDef(fd)) = meta_table.get(&Value::String("__mod".into())) {
+                            self.call_fn(&fd.clone(), &vec![Expr::Literal(t1.clone()), Expr::Literal(t2.clone())]);
+                        }
+                    }
+                }
+            }
+        }
         return Value::Nil;
     }
 
@@ -521,7 +546,6 @@ impl Interpreter {
                 } else if &Expr::Literal(Value::VarargsIdentifier) == var {
                     // varargs initialization case
                     if let Expr::Literal(Value::Varargs(varargs)) = val {
-                        println!("Almost there");
                         self.get_current_stack_env().table.as_ref().borrow_mut().insert(Value::VarargsIdentifier, Value::Varargs(varargs.clone()));                        
                     }
                 } else {
@@ -711,6 +735,16 @@ impl Interpreter {
                         let t2 = self.eval_expr(&*o2);
                         return self.equals(t1, t2);
                     },
+                    Token::NotEquals => {
+                        let t1 = self.eval_expr(*&o1);
+                        let t2 = self.eval_expr(&*o2);
+                        let to_negate = self.equals(t1, t2);
+                        if let Value::Boolean(b) = to_negate {
+                            return Value::Boolean(!b);
+                        } else {
+                            panic!("Internal error: equality should always return boolean");
+                        }
+                    }
                     Token::GreaterThanOrEqual => {
                         let t1 = self.eval_expr(&*o1);
                         let t2 = self.eval_expr(&*o2);
@@ -746,6 +780,11 @@ impl Interpreter {
                             return v1;
                         }
                         return self.eval_expr(&*o2);
+                    },
+                    Token::Percent => {
+                        let t1 = self.eval_expr(&*o1);
+                        let t2 = self.eval_expr(&*o2);
+                        return self.modulo_vals(t1, t2);
                     }
                     _ => panic!("Operator not supported yet")
                 }
@@ -778,7 +817,8 @@ impl Interpreter {
                     let to_not = &self.eval_expr(e);
                     return Value::Boolean(!self.is_truthy(to_not)); 
                 } else if op == &Token::Pound {
-                    return Self::value_length(&self.eval_expr(e)).unwrap_or_else(|| Value::Nil);
+                    let to_measure = self.eval_expr(e);
+                    return self.value_length(&to_measure).unwrap_or_else(|| Value::Nil);
                 } else {
                     panic!("Unsupported unary operation");
                 }
@@ -880,7 +920,6 @@ impl Interpreter {
             if param == &Expr::Varargs {
                 let mut vararg_values: Vec<Value> = vec![];
                 for a in &arg_values[arg_counter..] {
-                    println!("An arg is being passed");
                     vararg_values.push(a.clone());
                 }
                 args_decls.push(Stmt::LocalAssignment(Expr::Literal(Value::VarargsIdentifier), Expr::Literal(Value::Varargs(vararg_values))));

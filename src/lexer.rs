@@ -96,7 +96,10 @@ impl<'a> Lexer<'a> {
                 self.advance();
             } else if c == '"' {
                 self.advance();
-                ret.push(self.lex_string());
+                ret.push(self.lex_string('"'));
+            } else if c == '\'' {
+                self.advance();
+                ret.push(self.lex_string('\''));
             } else if c == '.' {
                 if let Some(nc) = self.peek_next_char() {
                     if nc.is_numeric() {
@@ -147,8 +150,22 @@ impl<'a> Lexer<'a> {
             } else if c == '#' {
                 ret.push(Token::Pound);
                 self.advance();
+            } else if c == '~' {
+                if let Some(next) = self.peek_next_char() {
+                    if next == '=' {
+                        self.advance();
+                        self.advance();
+                        ret.push(Token::NotEquals);
+                    } else {
+                        self.advance();
+                        ret.push(Token::Not);
+                    }
+                }
+            } else if c == '%' {
+                ret.push(Token::Percent);
+                self.advance();
             } else {
-                panic!("Cannot lex current sequence");
+                panic!("Cannot lex current sequence. Current char is {}, {} chars have been scanned", self.current_char(), ret.len());
             }
         }
         return ret;
@@ -178,12 +195,12 @@ impl<'a> Lexer<'a> {
         panic!("Ill formed long string");
     }
 
-    fn lex_string(&mut self) -> Token {
+    fn lex_string(&mut self, string_limiter: char) -> Token {
         let scan_start = self.current;
-        while self.current_char() != '"' && self.current < self.expr_str.len() {
+        while self.current_char() != string_limiter && self.current < self.expr_str.len() {
             self.advance();
         }
-        assert!(self.current_char() == '"', "Missing closing '\"'");
+        assert!(self.current_char() == string_limiter, "Missing closing quote");
         let ret = Token::Literal(Value::String(self.expr_str[scan_start..self.current].into()));
         self.advance();
         return ret;

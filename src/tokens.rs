@@ -48,4 +48,5 @@ pub enum Token {
     RightSquareBracket,
     Pound,
     Varargs,
+    Percent,
 }

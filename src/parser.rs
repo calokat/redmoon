@@ -124,7 +124,8 @@ impl Parser {
         let unary = self.unary();
         if let Ok(mut expr) = unary {
             while self.check_token_type(Token::Star) ||
-            self.check_token_type(Token::ForwardSlash) {
+            self.check_token_type(Token::ForwardSlash) ||
+            self.check_token_type(Token::Percent) {
                 let operator = self.previous_token();
                 let right = self.unary();
                 if let Ok(right) = right {
@@ -166,6 +167,7 @@ impl Parser {
         while self.check_token_type(Token::LessThan) ||
             self.check_token_type(Token::LessThanOrEqual) ||
             self.check_token_type(Token::Equals) ||
+            self.check_token_type(Token::NotEquals) ||
             self.check_token_type(Token::GreaterThanOrEqual) ||
             self.check_token_type(Token::GreaterThan) {
                 let operator = self.previous_token();
