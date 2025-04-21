@@ -1,3 +1,4 @@
+pub mod bytecode;
 pub mod tokens;
 pub mod expr;
 pub mod parser;
@@ -10,6 +11,7 @@ pub mod table;
 pub mod native_function;
 pub mod gc;
 
+use bytecode::vm::VmEnv;
 use interpreter::Interpreter;
 use tokens::Token;
 use expr::Expr;
@@ -34,6 +36,17 @@ pub fn exec_repl(expr: String, interp: &mut Interpreter) {
         }
     } else if let Err(s) = chunk {
         println!("Error parsing: {s}");
+    }
+}
+
+pub fn exec_bytecode(script: String) {
+    let mut lexer = Lexer::new(&script.as_str());
+    let tokens = lexer.tokenize();
+    let mut parser = Parser::new(tokens);
+    let chunk = parser.chunk();
+    if let Ok(stmt) = chunk {
+        let vm = VmEnv::new(stmt);
+        vm.exec();
     }
 }
 

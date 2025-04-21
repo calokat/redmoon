@@ -1,4 +1,4 @@
-use redmoon::{interpreter::Interpreter, lexer::Lexer, parser::Parser, exec_repl, exec_script};
+use redmoon::{interpreter::Interpreter, exec_repl, exec_script};
 fn main() {
     let mut interp = Interpreter::new();
     let args: Vec<String> = std::env::args().collect();
