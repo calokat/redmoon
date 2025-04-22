@@ -1,19 +1,20 @@
-use std::borrow::BorrowMut;
-use std::collections::HashMap;
 use crate::gc::gc_key::GcKey;
 use crate::gc::gc_values::GcValue;
 use crate::interpreter::Interpreter;
 use crate::table::Table;
 use crate::values::Value;
+use std::borrow::BorrowMut;
+use std::collections::HashMap;
 
 pub struct GcStore {
     store: HashMap<GcKey, GcValue>,
 }
 
 impl GcStore {
-
     pub fn new() -> Self {
-        GcStore { store: HashMap::new() }
+        GcStore {
+            store: HashMap::new(),
+        }
     }
 
     pub fn store(&mut self, key: GcKey, value: GcValue) {
@@ -39,10 +40,11 @@ impl GcStore {
                         let gc_value = self.get_value(gc_key).unwrap();
                         if let GcValue::Table(gct) = gc_value {
                             marked_gc_keys.push(gc_key.clone());
-                            let newly_marked_keys = &mut self.collect_garbage_from(gct, &mut marked_gc_keys);
+                            let newly_marked_keys =
+                                &mut self.collect_garbage_from(gct, &mut marked_gc_keys);
                             marked_gc_keys.append(newly_marked_keys);
                         }
-                    },
+                    }
                     _ => {}
                 };
                 match value {
@@ -51,20 +53,22 @@ impl GcStore {
                         let gc_value = self.get_value(gc_key).unwrap();
                         if let GcValue::Table(gct) = gc_value {
                             marked_gc_keys.push(gc_key.clone());
-                            let newly_marked_keys = &mut self.collect_garbage_from(gct, &mut marked_gc_keys);
+                            let newly_marked_keys =
+                                &mut self.collect_garbage_from(gct, &mut marked_gc_keys);
                             marked_gc_keys.append(newly_marked_keys);
                         }
-                    },
+                    }
                     _ => {}
                 }
             }
         }
         let len_before_collect = self.store.len();
         println!("We found {} garbage collectable objects through marking, a total of {} have been allocated", marked_gc_keys.len(), self.store.len());
-        self.store.retain(|key, value| {
-            marked_gc_keys.contains(key)
-        });
-        println!("Removed {} element(s)", len_before_collect - self.store.len());
+        self.store.retain(|key, value| marked_gc_keys.contains(key));
+        println!(
+            "Removed {} element(s)",
+            len_before_collect - self.store.len()
+        );
     }
 
     fn collect_garbage_from(&self, table: &Table, visited_list: &mut Vec<GcKey>) -> Vec<GcKey> {
@@ -79,7 +83,7 @@ impl GcStore {
                         res.append(&mut self.collect_garbage_from(child_table, visited_list));
                     }
                     res.push(gck.clone());
-                },
+                }
                 _ => {}
             };
             match value {
@@ -91,10 +95,9 @@ impl GcStore {
                         res.append(&mut self.collect_garbage_from(child_table, visited_list));
                     }
                     res.push(gck.clone());
-                },
+                }
                 _ => {}
             };
-
         }
         return res;
     }

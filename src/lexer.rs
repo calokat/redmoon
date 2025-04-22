@@ -2,32 +2,12 @@ use crate::Token;
 use crate::Value;
 pub struct Lexer<'a> {
     expr_str: &'a str,
-    current: usize
+    current: usize,
 }
 
 const RESERVED_WORDS: [&str; 22] = [
-    "and",
-    "break",
-    "do",
-    "else",
-    "elseif",
-    "end",
-    "false",
-    "for",
-    "function",
-    "goto",
-    "if",
-    "in",
-    "local",
-    "nil",
-    "not",
-    "or",
-    "repeat",
-    "return",
-    "then",
-    "true",
-    "until",
-    "while",
+    "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
+    "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while",
 ];
 
 const RESERVED_WORDS_TOKENS: [Token; 22] = [
@@ -56,8 +36,11 @@ const RESERVED_WORDS_TOKENS: [Token; 22] = [
 ];
 
 impl<'a> Lexer<'a> {
-    pub fn new(s: &'a str) -> Self {    
-        return Self { expr_str: s, current: 0 };
+    pub fn new(s: &'a str) -> Self {
+        return Self {
+            expr_str: s,
+            current: 0,
+        };
     }
 
     pub fn tokenize(&mut self) -> Vec<Token> {
@@ -88,8 +71,7 @@ impl<'a> Lexer<'a> {
             } else if c == ',' {
                 ret.push(Token::Comma);
                 self.advance();
-            } else if c.is_alphabetic() ||
-            c == '_' {
+            } else if c.is_alphabetic() || c == '_' {
                 ret.push(self.lex_identifier());
             } else if c == ';' {
                 ret.push(Token::Semicolon);
@@ -165,7 +147,11 @@ impl<'a> Lexer<'a> {
                 ret.push(Token::Percent);
                 self.advance();
             } else {
-                panic!("Cannot lex current sequence. Current char is {}, {} chars have been scanned", self.current_char(), ret.len());
+                panic!(
+                    "Cannot lex current sequence. Current char is {}, {} chars have been scanned",
+                    self.current_char(),
+                    ret.len()
+                );
             }
         }
         return ret;
@@ -187,7 +173,9 @@ impl<'a> Lexer<'a> {
                 self.advance();
             }
             if self.current_char() == ']' && level == closing_level {
-                let ret = Token::Literal(Value::String(self.expr_str[scan_start..self.current - (1 + closing_level)].into()));
+                let ret = Token::Literal(Value::String(
+                    self.expr_str[scan_start..self.current - (1 + closing_level)].into(),
+                ));
                 self.advance();
                 return ret;
             }
@@ -200,8 +188,13 @@ impl<'a> Lexer<'a> {
         while self.current_char() != string_limiter && self.current < self.expr_str.len() {
             self.advance();
         }
-        assert!(self.current_char() == string_limiter, "Missing closing quote");
-        let ret = Token::Literal(Value::String(self.expr_str[scan_start..self.current].into()));
+        assert!(
+            self.current_char() == string_limiter,
+            "Missing closing quote"
+        );
+        let ret = Token::Literal(Value::String(
+            self.expr_str[scan_start..self.current].into(),
+        ));
         self.advance();
         return ret;
     }
@@ -215,39 +208,54 @@ impl<'a> Lexer<'a> {
                 continue;
             }
             break;
-        };
-            return Token::Literal(Value::Number(self.expr_str[scan_start..self.current].parse().expect("lex_number(): Above code should ensure a valid scan")));
+        }
+        return Token::Literal(Value::Number(
+            self.expr_str[scan_start..self.current]
+                .parse()
+                .expect("lex_number(): Above code should ensure a valid scan"),
+        ));
     }
 
     fn lex_identifier(&mut self) -> Token {
         let scan_start = self.current;
         while self.current < self.expr_str.len() {
             let c = self.current_char();
-            if c.is_alphanumeric() ||
-             c == '_' {
+            if c.is_alphanumeric() || c == '_' {
                 self.advance();
                 continue;
             }
             break;
-        };
+        }
 
         if let Ok(r_idx) = RESERVED_WORDS.binary_search(&&self.expr_str[scan_start..self.current]) {
             return match r_idx {
                 6 => Token::Literal(Value::Boolean(false)),
                 13 => Token::Literal(Value::Nil),
                 19 => Token::Literal(Value::Boolean(true)),
-                _ => RESERVED_WORDS_TOKENS[r_idx].clone()
-            }
+                _ => RESERVED_WORDS_TOKENS[r_idx].clone(),
+            };
         }
         return Token::Identifier(self.expr_str[scan_start..self.current].into());
     }
 
     fn lex_operator(&mut self, c: char) -> Token {
-         match c {
-            '+' => {self.advance(); Token::Plus},
-            '-' => {self.advance(); Token::Minus},
-            '/' => {self.advance(); Token::ForwardSlash},
-            '*' => {self.advance(); Token::Star},
+        match c {
+            '+' => {
+                self.advance();
+                Token::Plus
+            }
+            '-' => {
+                self.advance();
+                Token::Minus
+            }
+            '/' => {
+                self.advance();
+                Token::ForwardSlash
+            }
+            '*' => {
+                self.advance();
+                Token::Star
+            }
             '=' => {
                 self.advance();
                 if self.current_char() == '=' {
@@ -255,7 +263,7 @@ impl<'a> Lexer<'a> {
                     return Token::Equals;
                 }
                 return Token::Assign;
-            },
+            }
             '<' => {
                 self.advance();
                 if self.current_char() == '=' {
@@ -263,7 +271,7 @@ impl<'a> Lexer<'a> {
                     return Token::LessThanOrEqual;
                 }
                 return Token::LessThan;
-            },
+            }
             '>' => {
                 self.advance();
                 if self.current_char() == '=' {
@@ -272,7 +280,7 @@ impl<'a> Lexer<'a> {
                 }
                 return Token::GreaterThan;
             }
-            _ => panic!("Unknown symbol")
+            _ => panic!("Unknown symbol"),
         }
     }
 
@@ -285,7 +293,7 @@ impl<'a> Lexer<'a> {
             '<' => true,
             '>' => true,
             '=' => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -295,10 +303,14 @@ impl<'a> Lexer<'a> {
         } else {
             panic!("Lexer internal error: reading past end of buffer");
         }
-    } 
+    }
 
     fn current_char(&self) -> char {
-        return self.expr_str.chars().nth(self.current).expect("Lexer should not be out of bounds");
+        return self
+            .expr_str
+            .chars()
+            .nth(self.current)
+            .expect("Lexer should not be out of bounds");
     }
 
     fn at_eof(&self) -> bool {

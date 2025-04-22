@@ -8,7 +8,10 @@ pub enum Expr {
     Var(String),
     Exprlist(Vec<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
-    Accessor(Box<Expr> /* Table being accessed */, Box<Expr> /* Expr that is accessing */),
+    Accessor(
+        Box<Expr>, /* Table being accessed */
+        Box<Expr>, /* Expr that is accessing */
+    ),
     FieldList(Vec<(Box<Expr>, Box<Expr>)>),
     Varargs,
 }

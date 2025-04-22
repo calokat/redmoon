@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use ordered_float::OrderedFloat;
 
-use crate::{Token, Expr, Stmt, function::Function, values::Value};
+use crate::{function::Function, values::Value, Expr, Stmt, Token};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -11,7 +11,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        return Self { tokens, current: 0 }
+        return Self { tokens, current: 0 };
     }
 
     fn primary(&mut self) -> Result<Expr, String> {
@@ -49,19 +49,30 @@ impl Parser {
             f_name = Some(s);
             self.advance();
         }
-        assert!(self.check_token_type(Token::LeftParens), "Function definition needs an opening parentheses");
-        let params ;
-        
+        assert!(
+            self.check_token_type(Token::LeftParens),
+            "Function definition needs an opening parentheses"
+        );
+        let params;
+
         if self.current_token() != Some(Token::RightParens) {
             params = self.expr_list()?;
         } else {
             params = Expr::Exprlist(vec![]);
         }
 
-        assert!(self.check_token_type(Token::RightParens), "Function definition needs a closing parentheses");
+        assert!(
+            self.check_token_type(Token::RightParens),
+            "Function definition needs a closing parentheses"
+        );
         if let Expr::Exprlist(params) = params {
             let body = Box::new(Stmt::Block(self.do_block()?));
-            return Ok(Expr::Literal(Value::FunctionDef(Function::new(body, params, f_name, VecDeque::new()))));
+            return Ok(Expr::Literal(Value::FunctionDef(Function::new(
+                body,
+                params,
+                f_name,
+                VecDeque::new(),
+            ))));
         } else {
             return Err("Invalid parameter in function definition".into());
         }
@@ -73,7 +84,10 @@ impl Parser {
             if self.check_token_type(Token::Period) {
                 let field = self.primary()?;
                 if let Expr::Var(name) = field {
-                    left = Expr::Accessor(Box::new(left), Box::new(Expr::Literal(Value::String(name))));
+                    left = Expr::Accessor(
+                        Box::new(left),
+                        Box::new(Expr::Literal(Value::String(name))),
+                    );
                 }
             } else if self.check_token_type(Token::LeftSquareBracket) {
                 let right = self.expression()?;
@@ -107,14 +121,16 @@ impl Parser {
         return Ok(left);
     }
 
-
     fn unary(&mut self) -> Result<Expr, String> {
-        if self.check_token_type(Token::Minus) || self.check_token_type(Token::Not) || self.check_token_type(Token::Pound) {
+        if self.check_token_type(Token::Minus)
+            || self.check_token_type(Token::Not)
+            || self.check_token_type(Token::Pound)
+        {
             let operator = self.previous_token();
             if let Ok(right) = self.unary() {
                 return Ok(Expr::Unary(Box::new(right), operator));
             } else {
-                return Err("Unsupported unary operation".into())
+                return Err("Unsupported unary operation".into());
             }
         }
         return self.accessor();
@@ -123,9 +139,10 @@ impl Parser {
     fn factor(&mut self) -> Result<Expr, String> {
         let unary = self.unary();
         if let Ok(mut expr) = unary {
-            while self.check_token_type(Token::Star) ||
-            self.check_token_type(Token::ForwardSlash) ||
-            self.check_token_type(Token::Percent) {
+            while self.check_token_type(Token::Star)
+                || self.check_token_type(Token::ForwardSlash)
+                || self.check_token_type(Token::Percent)
+            {
                 let operator = self.previous_token();
                 let right = self.unary();
                 if let Ok(right) = right {
@@ -134,7 +151,7 @@ impl Parser {
                     return right;
                 }
             }
-    
+
             return Ok(expr);
         } else {
             return unary;
@@ -144,8 +161,7 @@ impl Parser {
     fn term(&mut self) -> Result<Expr, String> {
         let mut expr = self.factor()?;
 
-        while self.check_token_type(Token::Plus) ||
-        self.check_token_type(Token::Minus) {
+        while self.check_token_type(Token::Plus) || self.check_token_type(Token::Minus) {
             let operator = self.previous_token();
             let right = self.factor()?;
             expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
@@ -164,25 +180,25 @@ impl Parser {
 
     fn comparison(&mut self) -> Result<Expr, String> {
         let mut expr = self.concat()?;
-        while self.check_token_type(Token::LessThan) ||
-            self.check_token_type(Token::LessThanOrEqual) ||
-            self.check_token_type(Token::Equals) ||
-            self.check_token_type(Token::NotEquals) ||
-            self.check_token_type(Token::GreaterThanOrEqual) ||
-            self.check_token_type(Token::GreaterThan) {
-                let operator = self.previous_token();
-                let right = self.concat()?;
-                expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
+        while self.check_token_type(Token::LessThan)
+            || self.check_token_type(Token::LessThanOrEqual)
+            || self.check_token_type(Token::Equals)
+            || self.check_token_type(Token::NotEquals)
+            || self.check_token_type(Token::GreaterThanOrEqual)
+            || self.check_token_type(Token::GreaterThan)
+        {
+            let operator = self.previous_token();
+            let right = self.concat()?;
+            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
 
-            return Ok(expr);
+        return Ok(expr);
     }
 
     fn equality(&mut self) -> Result<Expr, String> {
         let mut expr = self.comparison()?;
 
-        while self.check_token_type(Token::Equals) ||
-        self.check_token_type(Token::NotEquals) {
+        while self.check_token_type(Token::Equals) || self.check_token_type(Token::NotEquals) {
             let operator = self.previous_token();
             let right = self.term()?;
             expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
@@ -201,20 +217,35 @@ impl Parser {
         while !self.check_token_type(Token::RightCurlyBrace) {
             if self.check_token_type(Token::LeftSquareBracket) {
                 let key = self.expression()?;
-                assert!(self.check_token_type(Token::RightSquareBracket), "expect closing bracket when declaring fields in a table");
-                assert!(self.check_token_type(Token::Assign), "field needs to be assigned to");
+                assert!(
+                    self.check_token_type(Token::RightSquareBracket),
+                    "expect closing bracket when declaring fields in a table"
+                );
+                assert!(
+                    self.check_token_type(Token::Assign),
+                    "field needs to be assigned to"
+                );
                 let value = self.expression()?;
                 fields.push((Box::new(key), Box::new(value)));
-                assert!(self.is_field_seperator() || self.current_token() == Some(Token::RightCurlyBrace), "Fields need to be properly separated");
+                assert!(
+                    self.is_field_seperator()
+                        || self.current_token() == Some(Token::RightCurlyBrace),
+                    "Fields need to be properly separated"
+                );
             } else {
                 let expr = self.expression()?;
-                if self.is_field_seperator() || self.current_token() == Some(Token::RightCurlyBrace) {
-                    fields.push((Box::new(Expr::Literal(Value::Number(OrderedFloat(field_counter as f32)))), Box::new(expr)));
+                if self.is_field_seperator() || self.current_token() == Some(Token::RightCurlyBrace)
+                {
+                    fields.push((
+                        Box::new(Expr::Literal(Value::Number(OrderedFloat(
+                            field_counter as f32,
+                        )))),
+                        Box::new(expr),
+                    ));
                 } else if self.check_token_type(Token::Assign) {
                     if let Expr::Var(s) = expr {
                         let value = self.expression()?;
                         fields.push((Box::new(Expr::Literal(Value::String(s))), Box::new(value)));
-
                     }
                 }
             }
@@ -246,7 +277,6 @@ impl Parser {
         return Ok(expr);
     }
 
-
     fn expression(&mut self) -> Result<Expr, String> {
         return self.or();
     }
@@ -262,7 +292,7 @@ impl Parser {
                 expr_vec.push(Expr::Varargs);
                 found_varargs = true;
             } else {
-                expr_vec.push(self.expression()?);                
+                expr_vec.push(self.expression()?);
             }
         }
         return Ok(Expr::Exprlist(expr_vec));
@@ -270,18 +300,33 @@ impl Parser {
 
     fn numeric_for_loop(&mut self) -> Result<Stmt, String> {
         let control_var = Expr::Exprlist(vec![self.primary()?]);
-        assert!(self.check_token_type(Token::Assign), "Missing \"=\" when assigning to control var");
+        assert!(
+            self.check_token_type(Token::Assign),
+            "Missing \"=\" when assigning to control var"
+        );
         let control_value = self.expression()?;
-        assert!(self.check_token_type(Token::Comma), "Numeric for loop needs proper separation of fields");
+        assert!(
+            self.check_token_type(Token::Comma),
+            "Numeric for loop needs proper separation of fields"
+        );
         let limit = self.expression()?;
         let step = if self.check_token_type(Token::Comma) {
             self.expression()?
         } else {
             Expr::Literal(Value::Number(1.0f32.into()))
         };
-        assert!(self.check_token_type(Token::Do), "For loop missing \"do\" keyword");
+        assert!(
+            self.check_token_type(Token::Do),
+            "For loop missing \"do\" keyword"
+        );
         let body = self.do_block()?;
-        return Ok(Stmt::NumericForLoop(control_var, control_value, limit, step, body));
+        return Ok(Stmt::NumericForLoop(
+            control_var,
+            control_value,
+            limit,
+            step,
+            body,
+        ));
     }
 
     fn assignment(&mut self) -> Result<Stmt, String> {
@@ -289,7 +334,10 @@ impl Parser {
             let func = self.function_def()?;
             if let Expr::Literal(Value::FunctionDef(fd)) = func {
                 if let Some(id_str) = fd.get_name() {
-                    return Ok(Stmt::Assignment(Expr::Exprlist(vec![Expr::Var(id_str)]), Expr::Exprlist(vec![Expr::Literal(Value::FunctionDef(fd))])));
+                    return Ok(Stmt::Assignment(
+                        Expr::Exprlist(vec![Expr::Var(id_str)]),
+                        Expr::Exprlist(vec![Expr::Literal(Value::FunctionDef(fd))]),
+                    ));
                 } else {
                     return Err("Cannot assign to function without name".into());
                 }
@@ -310,7 +358,10 @@ impl Parser {
         while !self.check_token_type(Token::End) && self.current < self.tokens.len() {
             res.push(self.statement()?);
         }
-        assert!(self.previous_token() == Token::End, "Missing \"End\" keyword");
+        assert!(
+            self.previous_token() == Token::End,
+            "Missing \"End\" keyword"
+        );
         return Ok(res);
     }
 
@@ -319,11 +370,11 @@ impl Parser {
         match assign_stmt {
             Stmt::Assignment(vars, vals) => {
                 return Ok(Stmt::LocalAssignment(vars, vals));
-            },
+            }
             Stmt::ExprStmt(vars) => {
                 return Ok(Stmt::LocalAssignment(vars, Expr::Exprlist(vec![])));
-            },
-            _ => Err("Invalid local assignment".into())
+            }
+            _ => Err("Invalid local assignment".into()),
         }
     }
 
@@ -337,19 +388,37 @@ impl Parser {
 
     fn if_statement(&mut self) -> Result<Stmt, String> {
         let cond = self.expression()?;
-        assert!(self.check_token_type(Token::Then), "If statement missing \"then\" keyword");
+        assert!(
+            self.check_token_type(Token::Then),
+            "If statement missing \"then\" keyword"
+        );
         let mut stmts: Vec<Stmt> = vec![];
-        while !self.check_token_type(Token::Else) && !self.check_token_type(Token::Elseif) && !self.check_token_type(Token::End) && self.current < self.tokens.len() {
+        while !self.check_token_type(Token::Else)
+            && !self.check_token_type(Token::Elseif)
+            && !self.check_token_type(Token::End)
+            && self.current < self.tokens.len()
+        {
             stmts.push(self.statement()?);
         }
         if self.previous_token() == Token::Else {
-            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(Stmt::Block(self.do_block()?))));
+            return Ok(Stmt::IfStmt(
+                cond,
+                Box::new(Stmt::Block(stmts)),
+                Box::new(Stmt::Block(self.do_block()?)),
+            ));
         } else if self.previous_token() == Token::Elseif {
-            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(self.if_statement()?)));
+            return Ok(Stmt::IfStmt(
+                cond,
+                Box::new(Stmt::Block(stmts)),
+                Box::new(self.if_statement()?),
+            ));
         } else {
-            return Ok(Stmt::IfStmt(cond, Box::new(Stmt::Block(stmts)), Box::new(Stmt::Empty)));
+            return Ok(Stmt::IfStmt(
+                cond,
+                Box::new(Stmt::Block(stmts)),
+                Box::new(Stmt::Empty),
+            ));
         }
-
     }
 
     fn statement(&mut self) -> Result<Stmt, String> {
@@ -364,7 +433,10 @@ impl Parser {
             return self.if_statement();
         } else if self.check_token_type(Token::While) {
             let cond = self.expression()?;
-            assert!(self.check_token_type(Token::Do), "while loop missing \"do\" keyword");
+            assert!(
+                self.check_token_type(Token::Do),
+                "while loop missing \"do\" keyword"
+            );
             let body = self.do_block()?;
             return Ok(Stmt::WhileLoop(cond, Box::new(Stmt::Block(body))));
         } else if self.check_token_type(Token::Repeat) {
@@ -380,7 +452,6 @@ impl Parser {
         }
         return self.assignment();
     }
-
 
     fn block(&mut self) -> Result<Vec<Stmt>, String> {
         let mut res = vec![];

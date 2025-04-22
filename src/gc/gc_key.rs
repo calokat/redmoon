@@ -1,7 +1,7 @@
 use std::{hash::Hash, rc::Rc};
 #[derive(Eq, Clone)]
 pub struct GcKey {
-    _rc: Rc<u8>
+    _rc: Rc<u8>,
 }
 
 impl GcKey {
