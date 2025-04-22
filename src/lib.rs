@@ -1,28 +1,28 @@
 pub mod bytecode;
-pub mod tokens;
 pub mod expr;
-pub mod parser;
-pub mod lexer;
-pub mod interpreter;
-pub mod stmt;
-pub mod values;
 pub mod function;
-pub mod table;
-pub mod native_function;
 pub mod gc;
+pub mod interpreter;
+pub mod lexer;
+pub mod native_function;
+pub mod parser;
+pub mod stmt;
+pub mod table;
+pub mod tokens;
+pub mod values;
 
 use bytecode::vm::VmEnv;
-use interpreter::Interpreter;
-use tokens::Token;
 use expr::Expr;
-use parser::Parser;
+use interpreter::Interpreter;
 use lexer::Lexer;
+use parser::Parser;
 use stmt::Stmt;
+use tokens::Token;
 use values::Value;
 
 pub fn exec_script(script: String) {
     let mut interp = Interpreter::new();
-    exec_repl(script, &mut interp);
+    exec_bytecode(script);
 }
 
 pub fn exec_repl(expr: String, interp: &mut Interpreter) {
@@ -45,7 +45,7 @@ pub fn exec_bytecode(script: String) {
     let mut parser = Parser::new(tokens);
     let chunk = parser.chunk();
     if let Ok(stmt) = chunk {
-        let vm = VmEnv::new(stmt);
+        let mut vm = VmEnv::new(stmt);
         vm.exec();
     }
 }

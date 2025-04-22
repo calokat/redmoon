@@ -1,8 +1,28 @@
-use ordered_float::OrderedFloat;
 use crate::function::Function;
 use crate::gc::gc_key::GcKey;
 use crate::native_function::NativeFunction;
+use ordered_float::OrderedFloat;
 use std::fmt::Display;
+use std::ops::{Add, Div, Mul, Sub};
+
+macro_rules! impl_op {
+    ($trait:ident, $fn:ident, $op:tt) => {
+        impl $trait for Value {
+            type Output = Result<Value, String>;
+            fn $fn(self, rhs: Self) -> Self::Output {
+                match self {
+                    Value::Number(a) => match rhs {
+                        Value::Number(b) => Ok(Value::Number(a $op b)),
+                        _ => Err("Only numbers can be added".into()),
+                    },
+                    _ => Err("Only numbers can be added".into()),
+                }
+            }
+        }
+
+    };
+}
+
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum Value {
     ValList(Vec<Value>),
@@ -19,7 +39,6 @@ pub enum Value {
     MetaKey,
     Varargs(Vec<Value>),
     VarargsIdentifier,
-
 }
 
 impl Display for Value {
@@ -39,7 +58,7 @@ impl Display for Value {
                     }
                 }
                 std::fmt::Result::Ok(())
-            },
+            }
             Value::Interrupt => panic!("Unprintable value"),
             Value::MetaKey => panic!("Unprintable value"),
             Value::Varargs(va) => {
@@ -49,8 +68,16 @@ impl Display for Value {
                     }
                 }
                 std::fmt::Result::Ok(())
-            },
+            }
             Value::VarargsIdentifier => write!(f, "<varargs>"),
         }
     }
 }
+
+impl_op! {Add, add, +}
+
+impl_op! {Sub, sub, -}
+
+impl_op! {Mul, mul, *}
+
+impl_op! {Div, div, /}
