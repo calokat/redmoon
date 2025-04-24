@@ -8,3 +8,10 @@ else
         663 + 3
     end
 end
+
+while (true) do
+    1 + 1 + 1
+    break
+end
+
+1 + 41

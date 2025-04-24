@@ -16,6 +16,7 @@ macro_rules! binary_op {
 
 enum ByteCode {
     Add,
+    Break,
     Subtract,
     Multiply,
     Divide,
@@ -105,25 +106,19 @@ impl VmEnv {
                 let bc_diff_2 = self.build_bytecode_from_stmt(*b2);
                 let placeholder_index = self.bc.len() - 1 - bc_diff_2;
                 self.bc[placeholder_index] = ByteCode::JumpBy(bc_diff_2);
-                // let v1 = VmEnv::new(*b1);
-                // let v2 = VmEnv::new(*b2);
-
-                // branch
-                // placeholder
-                // i
-                // i
-                // i
-
-                // self.bc.push(ByteCode::JumpBy(v1.bc.len() + 1));
-                // self.bc.extend(v1.bc);
-                // self.bc.push(ByteCode::JumpBy(v2.bc.len()));
-                // self.bc.extend(v2.bc);
-
-                // let v1_len = v1.bc.len();
-                // self.bc.extend(v1.bc);
-                // self.bc.push(ByteCode::JumpBy(v2.bc.len()));
-                // self.bc.extend(v2.bc);
-                // self.bc.push(ByteCode::JumpBy(v1_len));
+            }
+            Stmt::WhileLoop(cond, body) => {
+                let cond_length = self.build_bytecode_from_expr(&cond);
+                self.bc.push(ByteCode::Branch);
+                self.bc.push(ByteCode::Placeholder);
+                let placeholder_index = self.bc.len() - 1;
+                let body_length = self.build_bytecode_from_stmt(*body);
+                self.bc
+                    .push(ByteCode::JumpBack(2 + body_length + cond_length));
+                self.bc[placeholder_index] = ByteCode::JumpBy(body_length + 1);
+            }
+            Stmt::Break => {
+                self.bc.push(ByteCode::Break);
             }
             Stmt::Empty => {}
             _ => todo!(),
@@ -202,6 +197,17 @@ impl VmEnv {
                     let a = self.stack.pop_back().unwrap();
                     if self.is_truthy(&a) {
                         icounter += 1;
+                    }
+                }
+                Some(&ByteCode::Break) => {
+                    while let Some(bc) = self.bc.get(icounter) {
+                        if let &ByteCode::JumpBack(_) = bc {
+                            break;
+                        }
+                        icounter += 1;
+                    }
+                    if let None = self.bc.get(icounter) {
+                        panic!("Used 'break' outside of a loop");
                     }
                 }
                 Some(&ByteCode::JumpTo(i)) => {
