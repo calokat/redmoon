@@ -20,6 +20,11 @@ enum ByteCode {
     Multiply,
     Divide,
     LoadConstant(u32),
+    Branch,
+    JumpTo(usize),
+    JumpBy(usize),
+    JumpBack(usize),
+    Placeholder,
 }
 
 pub struct VmEnv {
@@ -53,6 +58,15 @@ impl ConstantBuffer {
 type ByteCodeBuffer = Vec<ByteCode>;
 
 impl VmEnv {
+    fn is_truthy(&self, v: &Value) -> bool {
+        match v {
+            Value::String(s) => !s.is_empty(),
+            Value::Nil => false,
+            Value::Boolean(b) => b.clone(),
+            _ => true,
+        }
+    }
+
     pub fn new(s: Stmt) -> VmEnv {
         let mut vm: VmEnv = VmEnv {
             stack: VecDeque::new(),
@@ -63,18 +77,62 @@ impl VmEnv {
         return vm;
     }
 
-    fn build_bytecode_from_stmt(&mut self, stmt: Stmt) {
-        if let Stmt::Chunk(cv) = stmt {
-            for c in cv {
-                match c {
-                    Stmt::ExprStmt(e) => self.build_bytecode_from_expr(&e),
-                    _ => todo!(),
+    fn build_bytecode_from_stmt(&mut self, stmt: Stmt) -> usize {
+        let initial_bc_length = self.bc.len();
+        match stmt {
+            Stmt::Chunk(cv) => {
+                for c in cv {
+                    self.build_bytecode_from_stmt(c);
                 }
             }
+            Stmt::Block(cv) => {
+                for c in cv {
+                    self.build_bytecode_from_stmt(c);
+                }
+            }
+            Stmt::ExprStmt(e) => {
+                self.build_bytecode_from_expr(&e);
+            }
+            Stmt::IfStmt(e, b1, b2) => {
+                self.build_bytecode_from_expr(&e);
+                self.bc.push(ByteCode::Branch);
+                self.bc.push(ByteCode::Placeholder);
+                let bc_diff_1 = self.build_bytecode_from_stmt(*b1);
+                let placeholder_index = self.bc.len() - 1 - bc_diff_1;
+                self.bc[placeholder_index] = ByteCode::JumpBy(bc_diff_1 + 1);
+
+                self.bc.push(ByteCode::Placeholder);
+                let bc_diff_2 = self.build_bytecode_from_stmt(*b2);
+                let placeholder_index = self.bc.len() - 1 - bc_diff_2;
+                self.bc[placeholder_index] = ByteCode::JumpBy(bc_diff_2);
+                // let v1 = VmEnv::new(*b1);
+                // let v2 = VmEnv::new(*b2);
+
+                // branch
+                // placeholder
+                // i
+                // i
+                // i
+
+                // self.bc.push(ByteCode::JumpBy(v1.bc.len() + 1));
+                // self.bc.extend(v1.bc);
+                // self.bc.push(ByteCode::JumpBy(v2.bc.len()));
+                // self.bc.extend(v2.bc);
+
+                // let v1_len = v1.bc.len();
+                // self.bc.extend(v1.bc);
+                // self.bc.push(ByteCode::JumpBy(v2.bc.len()));
+                // self.bc.extend(v2.bc);
+                // self.bc.push(ByteCode::JumpBy(v1_len));
+            }
+            Stmt::Empty => {}
+            _ => todo!(),
         }
+        return self.bc.len() - initial_bc_length;
     }
 
-    fn build_bytecode_from_expr(&mut self, e: &Expr) {
+    fn build_bytecode_from_expr(&mut self, e: &Expr) -> usize {
+        let initial_bc_length = self.bc.len();
         match e {
             Expr::Exprlist(expr_list) => {
                 for el in expr_list.iter() {
@@ -105,39 +163,65 @@ impl VmEnv {
             Expr::Grouping(e) => {
                 self.build_bytecode_from_expr(e);
             }
+            Expr::Literal(l) => {
+                self.constants.add_constant(l.clone(), &mut self.bc);
+            }
             _ => {
                 todo!()
             }
         }
+        return self.bc.len() - initial_bc_length;
     }
 
     pub fn exec(&mut self) {
-        for byte in self.bc.iter() {
-            match byte {
-                ByteCode::Add => {
+        let mut icounter = 0usize;
+        loop {
+            match self.bc.get(icounter) {
+                Some(&ByteCode::Add) => {
                     binary_op!(self, +);
                 }
-                ByteCode::Subtract => {
+                Some(&ByteCode::Subtract) => {
                     binary_op!(self, -);
                 }
-                ByteCode::Multiply => {
+                Some(&ByteCode::Multiply) => {
                     binary_op!(self, *);
                 }
-                ByteCode::Divide => {
+                Some(&ByteCode::Divide) => {
                     binary_op!(self, /);
                 }
-                ByteCode::LoadConstant(u) => {
+                Some(&ByteCode::LoadConstant(u)) => {
                     let constant = self
                         .constants
-                        .load_constant(*u as usize)
-                        .expect(&format!(
-                            "Constant buffer should have value at index {}",
-                            *u
-                        ))
+                        .load_constant(u as usize)
+                        .expect(&format!("Constant buffer should have value at index {}", u))
                         .clone();
                     self.stack.push_back(constant);
                 }
+                Some(&ByteCode::Branch) => {
+                    assert!(self.stack.len() >= 1, "Insufficient number of arguments");
+                    let a = self.stack.pop_back().unwrap();
+                    if self.is_truthy(&a) {
+                        icounter += 1;
+                    }
+                }
+                Some(&ByteCode::JumpTo(i)) => {
+                    icounter = i;
+                    continue;
+                }
+                Some(&ByteCode::JumpBack(i)) => {
+                    icounter -= i;
+                }
+                Some(&ByteCode::JumpBy(i)) => {
+                    icounter += i;
+                }
+                Some(&ByteCode::Placeholder) => {
+                    panic!("Internal error during bytecode generation")
+                }
+                None => {
+                    break;
+                }
             }
+            icounter += 1;
         }
     }
 }
