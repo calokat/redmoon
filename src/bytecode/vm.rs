@@ -27,8 +27,11 @@ enum ByteCode {
     JumpTo(usize),
     JumpBy(usize),
     JumpBack(usize),
-    SetEnv,
+    SetGlobalEnv,
+    SetLocalEnv,
     GetEnv,
+    PushEnv,
+    PopEnv,
     Placeholder,
 }
 
@@ -36,7 +39,8 @@ pub struct VmEnv {
     bc: ByteCodeBuffer,
     constants: ConstantBuffer,
     stack: VecDeque<Value>,
-    envs: VecDeque<UserTable>,
+    global_env: UserTable,
+    local_envs: VecDeque<UserTable>,
 }
 
 struct ConstantBuffer {
@@ -64,16 +68,23 @@ impl ConstantBuffer {
 type ByteCodeBuffer = Vec<ByteCode>;
 
 impl VmEnv {
-    fn get_current_env(&self) -> &UserTable {
-        self.envs
-            .back()
-            .expect("Internal Error: At least one environment must be active")
+    fn get_current_env_mut(&mut self) -> &mut UserTable {
+        self.local_envs.back_mut().unwrap_or(&mut self.global_env)
     }
 
-    fn get_current_env_mut(&mut self) -> &mut UserTable {
-        self.envs
-            .back_mut()
-            .expect("Internal Error: At least one environment must be active")
+    fn find_var(&self, key: &Value) -> Value {
+        return self
+            .local_envs
+            .iter()
+            .find_map(|le| {
+                if let Some(v) = le.table.borrow().get(key) {
+                    return Some(v).cloned();
+                } else {
+                    return None;
+                }
+            })
+            .or(self.global_env.table.borrow().get(key).cloned())
+            .unwrap_or(Value::Nil);
     }
 
     fn is_truthy(&self, v: &Value) -> bool {
@@ -86,13 +97,14 @@ impl VmEnv {
     }
 
     pub fn new(s: Stmt) -> VmEnv {
-        let mut envs = VecDeque::new();
-        envs.push_back(UserTable::new());
+        let local_envs = VecDeque::new();
+        let global_env = UserTable::new();
         let mut vm: VmEnv = VmEnv {
-            envs,
+            local_envs,
             stack: VecDeque::new(),
             bc: Vec::new(),
             constants: ConstantBuffer::new(),
+            global_env,
         };
         vm.build_bytecode_from_stmt(s);
         return vm;
@@ -115,6 +127,7 @@ impl VmEnv {
                 self.build_bytecode_from_expr(&e);
             }
             Stmt::IfStmt(e, b1, b2) => {
+                self.bc.push(ByteCode::PushEnv);
                 self.build_bytecode_from_expr(&e);
                 self.bc.push(ByteCode::Branch);
                 self.bc.push(ByteCode::Placeholder);
@@ -126,8 +139,10 @@ impl VmEnv {
                 let bc_diff_2 = self.build_bytecode_from_stmt(*b2);
                 let placeholder_index = self.bc.len() - 1 - bc_diff_2;
                 self.bc[placeholder_index] = ByteCode::JumpBy(bc_diff_2);
+                self.bc.push(ByteCode::PopEnv);
             }
             Stmt::WhileLoop(cond, body) => {
+                self.bc.push(ByteCode::PushEnv);
                 let cond_length = self.build_bytecode_from_expr(&cond);
                 self.bc.push(ByteCode::Branch);
                 self.bc.push(ByteCode::Placeholder);
@@ -136,6 +151,7 @@ impl VmEnv {
                 self.bc
                     .push(ByteCode::JumpBack(2 + body_length + cond_length));
                 self.bc[placeholder_index] = ByteCode::JumpBy(body_length + 1);
+                self.bc.push(ByteCode::PopEnv);
             }
             Stmt::Break => {
                 self.bc.push(ByteCode::Break);
@@ -145,14 +161,34 @@ impl VmEnv {
                 self.build_bytecode_from_expr(&r);
                 match &l {
                     Expr::Exprlist(vars) => {
-                        for var in vars {
+                        for var in vars.iter().rev() {
                             match &var {
                                 &Expr::Var(var_name) => {
                                     self.constants.add_constant(
                                         Value::String(var_name.clone()),
                                         &mut self.bc,
                                     );
-                                    self.bc.push(ByteCode::SetEnv);
+                                    self.bc.push(ByteCode::SetGlobalEnv);
+                                }
+                                _ => panic!("Cannot assign to expression"),
+                            }
+                        }
+                    }
+                    _ => panic!("Cannot assign to expression"),
+                }
+            }
+            Stmt::LocalAssignment(l, r) => {
+                self.build_bytecode_from_expr(&r);
+                match &l {
+                    Expr::Exprlist(vars) => {
+                        for var in vars.iter().rev() {
+                            match &var {
+                                &Expr::Var(var_name) => {
+                                    self.constants.add_constant(
+                                        Value::String(var_name.clone()),
+                                        &mut self.bc,
+                                    );
+                                    self.bc.push(ByteCode::SetLocalEnv);
                                 }
                                 _ => panic!("Cannot assign to expression"),
                             }
@@ -265,13 +301,25 @@ impl VmEnv {
                 Some(&ByteCode::JumpBy(i)) => {
                     icounter += i;
                 }
-                Some(&ByteCode::SetEnv) => {
+                Some(&ByteCode::SetGlobalEnv) => {
                     assert!(self.stack.len() >= 2, "Insufficient number of arguments");
                     let l = self.stack.pop_back().unwrap();
                     let r = self.stack.pop_back().unwrap();
                     match &l {
                         Value::String(_) => {
                             println!("{} gets assigned to {}", r, l);
+                            self.global_env.table.borrow_mut().insert(l, r);
+                        }
+                        _ => panic!("Cannot assign to expression"),
+                    }
+                }
+                Some(&ByteCode::SetLocalEnv) => {
+                    assert!(self.stack.len() >= 2, "Insufficient number of arguments");
+                    let l = self.stack.pop_back().unwrap();
+                    let r = self.stack.pop_back().unwrap();
+                    match &l {
+                        Value::String(_) => {
+                            println!("{} gets assigned to {} locally", r, l);
                             self.get_current_env_mut().table.borrow_mut().insert(l, r);
                         }
                         _ => panic!("Cannot assign to expression"),
@@ -281,10 +329,15 @@ impl VmEnv {
                     assert!(self.stack.len() >= 1, "Insufficient number of arguments");
                     let value = {
                         let key = self.stack.pop_back().unwrap();
-                        let current_table = self.get_current_env().table.borrow();
-                        current_table.get(&key).unwrap_or(&Value::Nil).clone()
+                        self.find_var(&key)
                     };
                     self.stack.push_back(value);
+                }
+                Some(&ByteCode::PushEnv) => {
+                    self.local_envs.push_back(UserTable::new());
+                }
+                Some(&ByteCode::PopEnv) => {
+                    self.local_envs.pop_back();
                 }
                 Some(&ByteCode::Placeholder) => {
                     panic!("Internal error during bytecode generation")
