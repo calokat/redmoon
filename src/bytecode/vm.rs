@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{expr::Expr, stmt::Stmt, tokens::Token, values::Value};
+use crate::{expr::Expr, stmt::Stmt, table::UserTable, tokens::Token, values::Value};
 
 macro_rules! binary_op {
     ($self:ident, $op:tt) => {
@@ -10,6 +10,8 @@ macro_rules! binary_op {
         if let Ok(c) = b $op a {
             println!("{}", c);
             $self.stack.push_back(c);
+        } else {
+            println!("What do you think you are doing");
         }
     };
 }
@@ -25,6 +27,8 @@ enum ByteCode {
     JumpTo(usize),
     JumpBy(usize),
     JumpBack(usize),
+    SetEnv,
+    GetEnv,
     Placeholder,
 }
 
@@ -32,6 +36,7 @@ pub struct VmEnv {
     bc: ByteCodeBuffer,
     constants: ConstantBuffer,
     stack: VecDeque<Value>,
+    envs: VecDeque<UserTable>,
 }
 
 struct ConstantBuffer {
@@ -59,6 +64,18 @@ impl ConstantBuffer {
 type ByteCodeBuffer = Vec<ByteCode>;
 
 impl VmEnv {
+    fn get_current_env(&self) -> &UserTable {
+        self.envs
+            .back()
+            .expect("Internal Error: At least one environment must be active")
+    }
+
+    fn get_current_env_mut(&mut self) -> &mut UserTable {
+        self.envs
+            .back_mut()
+            .expect("Internal Error: At least one environment must be active")
+    }
+
     fn is_truthy(&self, v: &Value) -> bool {
         match v {
             Value::String(s) => !s.is_empty(),
@@ -69,7 +86,10 @@ impl VmEnv {
     }
 
     pub fn new(s: Stmt) -> VmEnv {
+        let mut envs = VecDeque::new();
+        envs.push_back(UserTable::new());
         let mut vm: VmEnv = VmEnv {
+            envs,
             stack: VecDeque::new(),
             bc: Vec::new(),
             constants: ConstantBuffer::new(),
@@ -121,6 +141,26 @@ impl VmEnv {
                 self.bc.push(ByteCode::Break);
             }
             Stmt::Empty => {}
+            Stmt::Assignment(l, r) => {
+                self.build_bytecode_from_expr(&r);
+                match &l {
+                    Expr::Exprlist(vars) => {
+                        for var in vars {
+                            match &var {
+                                &Expr::Var(var_name) => {
+                                    self.constants.add_constant(
+                                        Value::String(var_name.clone()),
+                                        &mut self.bc,
+                                    );
+                                    self.bc.push(ByteCode::SetEnv);
+                                }
+                                _ => panic!("Cannot assign to expression"),
+                            }
+                        }
+                    }
+                    _ => panic!("Cannot assign to expression"),
+                }
+            }
             _ => todo!(),
         }
         return self.bc.len() - initial_bc_length;
@@ -160,6 +200,11 @@ impl VmEnv {
             }
             Expr::Literal(l) => {
                 self.constants.add_constant(l.clone(), &mut self.bc);
+            }
+            Expr::Var(name) => {
+                self.constants
+                    .add_constant(Value::String(name.clone()), &mut self.bc);
+                self.bc.push(ByteCode::GetEnv);
             }
             _ => {
                 todo!()
@@ -219,6 +264,27 @@ impl VmEnv {
                 }
                 Some(&ByteCode::JumpBy(i)) => {
                     icounter += i;
+                }
+                Some(&ByteCode::SetEnv) => {
+                    assert!(self.stack.len() >= 2, "Insufficient number of arguments");
+                    let l = self.stack.pop_back().unwrap();
+                    let r = self.stack.pop_back().unwrap();
+                    match &l {
+                        Value::String(_) => {
+                            println!("{} gets assigned to {}", r, l);
+                            self.get_current_env_mut().table.borrow_mut().insert(l, r);
+                        }
+                        _ => panic!("Cannot assign to expression"),
+                    }
+                }
+                Some(&ByteCode::GetEnv) => {
+                    assert!(self.stack.len() >= 1, "Insufficient number of arguments");
+                    let value = {
+                        let key = self.stack.pop_back().unwrap();
+                        let current_table = self.get_current_env().table.borrow();
+                        current_table.get(&key).unwrap_or(&Value::Nil).clone()
+                    };
+                    self.stack.push_back(value);
                 }
                 Some(&ByteCode::Placeholder) => {
                     panic!("Internal error during bytecode generation")
