@@ -4,7 +4,7 @@ use crate::{expr::Expr, stmt::Stmt, table::UserTable, tokens::Token, values::Val
 
 macro_rules! binary_op {
     ($self:ident, $op:tt) => {
-        assert!($self.stack.len() >= 2, "Insufficient number of arguments");
+        assert!($self.stack.len() >= 2, "Insufficient number of arguments {}", $self.stack.len());
         let a = $self.stack.pop_back().unwrap();
         let b = $self.stack.pop_back().unwrap();
         if let Ok(c) = b $op a {
@@ -16,17 +16,43 @@ macro_rules! binary_op {
     };
 }
 
+macro_rules! compare_nums {
+    ($v1:ident, $v2:ident, $op:tt) => {
+        match $v1 {
+            Value::Number(n1) => match $v2 {
+                Value::Number(n2) => n1 $op n2,
+                _ => false,
+            },
+            _ => false,
+        }
+    };
+}
+
+macro_rules! logical_op {
+    ($v1:ident, $v2:ident, $op:tt) => {
+        VmEnv::is_truthy($v1) $op VmEnv::is_truthy($v2)
+    };
+}
+
 enum ByteCode {
     Add,
+    And,
+    LessThan,
+    GreaterThanOrEqual,
+    GreaterThan,
+    LessThanOrEqual,
     Break,
     Subtract,
     Multiply,
     Divide,
     LoadConstant(u32),
+    Equals,
     Branch,
     JumpTo(usize),
     JumpBy(usize),
     JumpBack(usize),
+    Or,
+    Not,
     SetGlobalEnv,
     SetLocalEnv,
     GetEnv,
@@ -87,7 +113,57 @@ impl VmEnv {
             .unwrap_or(Value::Nil);
     }
 
-    fn is_truthy(&self, v: &Value) -> bool {
+    fn equals(t1: Value, t2: Value) -> Value {
+        match t1 {
+            Value::Number(n1) => match t2 {
+                Value::Number(n2) => Value::Boolean(n1 == n2),
+                _ => Value::Boolean(false),
+            },
+            Value::Nil => match t2 {
+                Value::Nil => Value::Boolean(true),
+                _ => Value::Boolean(false),
+            },
+            Value::Boolean(b1) => match t2 {
+                Value::Boolean(b2) => Value::Boolean(b1 == b2),
+                _ => Value::Boolean(false),
+            },
+            Value::String(s1) => match t2 {
+                Value::String(s2) => Value::Boolean(s1 == s2),
+                _ => Value::Boolean(false),
+            },
+            Value::FunctionDef(f1) => match t2 {
+                Value::FunctionDef(f2) => Value::Boolean(f1 == f2),
+                _ => Value::Boolean(false),
+            },
+            Value::NativeFunctionDef(nf1) => match t2 {
+                Value::NativeFunctionDef(nf2) => Value::Boolean(nf1 == nf2),
+                _ => Value::Boolean(false),
+            },
+            Value::Table(ut1) => match t2 {
+                Value::Table(ut2) => Value::Boolean(ut1 == ut2),
+                _ => Value::Boolean(false),
+            },
+            Value::ValList(_list) => {
+                panic!("Cannot compare value lists to each other");
+            }
+            Value::Interrupt => {
+                panic!("Impossible value");
+            }
+            Value::MetaKey => {
+                panic!("Impossible value");
+            }
+            Value::Varargs(_) => {
+                return if let Value::Varargs(_) = t2 {
+                    Value::Boolean(true)
+                } else {
+                    Value::Boolean(false)
+                }
+            }
+            Value::VarargsIdentifier => Value::Boolean(t2 == Value::VarargsIdentifier),
+        }
+    }
+
+    fn is_truthy(v: &Value) -> bool {
         match v {
             Value::String(s) => !s.is_empty(),
             Value::Nil => false,
@@ -113,12 +189,7 @@ impl VmEnv {
     fn build_bytecode_from_stmt(&mut self, stmt: Stmt) -> usize {
         let initial_bc_length = self.bc.len();
         match stmt {
-            Stmt::Chunk(cv) => {
-                for c in cv {
-                    self.build_bytecode_from_stmt(c);
-                }
-            }
-            Stmt::Block(cv) => {
+            Stmt::Chunk(cv) | Stmt::Block(cv) | Stmt::DoBlock(cv) => {
                 for c in cv {
                     self.build_bytecode_from_stmt(c);
                 }
@@ -149,7 +220,7 @@ impl VmEnv {
                 let placeholder_index = self.bc.len() - 1;
                 let body_length = self.build_bytecode_from_stmt(*body);
                 self.bc
-                    .push(ByteCode::JumpBack(2 + body_length + cond_length));
+                    .push(ByteCode::JumpBack(3 + body_length + cond_length));
                 self.bc[placeholder_index] = ByteCode::JumpBy(body_length + 1);
                 self.bc.push(ByteCode::PopEnv);
             }
@@ -176,6 +247,14 @@ impl VmEnv {
                     }
                     _ => panic!("Cannot assign to expression"),
                 }
+            }
+            Stmt::RepeatUntilLoop(body, cond) => {
+                self.bc.push(ByteCode::PushEnv);
+                let body_len = self.build_bytecode_from_stmt(*body);
+                let cond_len = self.build_bytecode_from_expr(&cond);
+                self.bc.push(ByteCode::Branch);
+                self.bc.push(ByteCode::JumpBack(body_len + cond_len + 2));
+                self.bc.push(ByteCode::PopEnv);
             }
             Stmt::LocalAssignment(l, r) => {
                 self.build_bytecode_from_expr(&r);
@@ -211,16 +290,8 @@ impl VmEnv {
                 }
             }
             Expr::Binary(a, op, b) => {
-                if let Expr::Literal(v) = &**a {
-                    self.constants.add_constant(v.clone(), &mut self.bc);
-                } else {
-                    self.build_bytecode_from_expr(&*a);
-                }
-                if let Expr::Literal(v) = &**b {
-                    self.constants.add_constant(v.clone(), &mut self.bc);
-                } else {
-                    self.build_bytecode_from_expr(&*b);
-                }
+                self.build_bytecode_from_expr(&**a);
+                self.build_bytecode_from_expr(&**b);
                 if op == &Token::Plus {
                     self.bc.push(ByteCode::Add);
                 } else if op == &Token::Minus {
@@ -229,6 +300,10 @@ impl VmEnv {
                     self.bc.push(ByteCode::Multiply);
                 } else if op == &Token::ForwardSlash {
                     self.bc.push(ByteCode::Divide);
+                } else if op == &Token::LessThan {
+                    self.bc.push(ByteCode::LessThan);
+                } else if op == &Token::Equals {
+                    self.bc.push(ByteCode::Equals);
                 }
             }
             Expr::Grouping(e) => {
@@ -242,6 +317,13 @@ impl VmEnv {
                     .add_constant(Value::String(name.clone()), &mut self.bc);
                 self.bc.push(ByteCode::GetEnv);
             }
+            Expr::Unary(e, t) => match t {
+                Token::Not => {
+                    self.build_bytecode_from_expr(&**e);
+                    self.bc.push(ByteCode::Not);
+                }
+                _ => panic!("Invalid unary operator"),
+            },
             _ => {
                 todo!()
             }
@@ -265,6 +347,48 @@ impl VmEnv {
                 Some(&ByteCode::Divide) => {
                     binary_op!(self, /);
                 }
+                Some(&ByteCode::LessThan) => {
+                    assert!(
+                        self.stack.len() >= 2,
+                        "Insufficient number of arguments {}",
+                        self.stack.len()
+                    );
+                    let r = self.stack.pop_back().unwrap();
+                    let l = self.stack.pop_back().unwrap();
+                    self.stack.push_back(Value::Boolean(compare_nums!(l, r, <)));
+                }
+                Some(&ByteCode::GreaterThanOrEqual) => {
+                    assert!(
+                        self.stack.len() >= 2,
+                        "Insufficient number of arguments {}",
+                        self.stack.len()
+                    );
+                    let r = self.stack.pop_back().unwrap();
+                    let l = self.stack.pop_back().unwrap();
+                    self.stack
+                        .push_back(Value::Boolean(compare_nums!(l, r, >=)));
+                }
+                Some(&ByteCode::GreaterThan) => {
+                    assert!(
+                        self.stack.len() >= 2,
+                        "Insufficient number of arguments {}",
+                        self.stack.len()
+                    );
+                    let r = self.stack.pop_back().unwrap();
+                    let l = self.stack.pop_back().unwrap();
+                    self.stack.push_back(Value::Boolean(compare_nums!(l, r, >)));
+                }
+                Some(&ByteCode::LessThanOrEqual) => {
+                    assert!(
+                        self.stack.len() >= 2,
+                        "Insufficient number of arguments {}",
+                        self.stack.len()
+                    );
+                    let r = self.stack.pop_back().unwrap();
+                    let l = self.stack.pop_back().unwrap();
+                    self.stack
+                        .push_back(Value::Boolean(compare_nums!(l, r, <=)));
+                }
                 Some(&ByteCode::LoadConstant(u)) => {
                     let constant = self
                         .constants
@@ -276,7 +400,7 @@ impl VmEnv {
                 Some(&ByteCode::Branch) => {
                     assert!(self.stack.len() >= 1, "Insufficient number of arguments");
                     let a = self.stack.pop_back().unwrap();
-                    if self.is_truthy(&a) {
+                    if Self::is_truthy(&a) {
                         icounter += 1;
                     }
                 }
@@ -293,7 +417,33 @@ impl VmEnv {
                 }
                 Some(&ByteCode::JumpTo(i)) => {
                     icounter = i;
-                    continue;
+                }
+                Some(&ByteCode::And) => {
+                    let l = &self.stack.pop_back().unwrap();
+                    let r = &self.stack.pop_back().unwrap();
+
+                    self.stack.push_back(Value::Boolean(logical_op!(l, r, &&)));
+                }
+                Some(&ByteCode::Or) => {
+                    let l = &self.stack.pop_back().unwrap();
+                    let r = &self.stack.pop_back().unwrap();
+
+                    self.stack.push_back(Value::Boolean(logical_op!(l, r, ||)));
+                }
+                Some(&ByteCode::Not) => {
+                    if let Value::Boolean(b) = self
+                        .stack
+                        .pop_back()
+                        .expect("Stack should have at least 1 argument")
+                    {
+                        self.stack.push_back(Value::Boolean(!b));
+                    }
+                }
+                Some(&ByteCode::Equals) => {
+                    let v1 = self.stack.pop_back().unwrap();
+                    let v2 = self.stack.pop_back().unwrap();
+
+                    self.stack.push_back(Self::equals(v1, v2));
                 }
                 Some(&ByteCode::JumpBack(i)) => {
                     icounter -= i;
