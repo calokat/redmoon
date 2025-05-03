@@ -1,6 +1,13 @@
 use std::collections::VecDeque;
 
-use crate::{expr::Expr, stmt::Stmt, table::UserTable, tokens::Token, values::Value};
+use crate::{
+    expr::Expr,
+    gc::{gc_key::GcKey, gc_store::GcStore, gc_values::GcValue},
+    stmt::Stmt,
+    table::{Table, UserTable},
+    tokens::Token,
+    values::Value,
+};
 
 macro_rules! binary_op {
     ($self:ident, $op:tt) => {
@@ -55,6 +62,8 @@ enum ByteCode {
     Not,
     SetGlobalEnv,
     SetLocalEnv,
+    SetTableField,
+    GetTableField,
     GetEnv,
     PushEnv,
     PopEnv,
@@ -67,6 +76,7 @@ pub struct VmEnv {
     stack: VecDeque<Value>,
     global_env: UserTable,
     local_envs: VecDeque<UserTable>,
+    gc: GcStore,
 }
 
 struct ConstantBuffer {
@@ -181,6 +191,7 @@ impl VmEnv {
             bc: Vec::new(),
             constants: ConstantBuffer::new(),
             global_env,
+            gc: GcStore::new(),
         };
         vm.build_bytecode_from_stmt(s);
         return vm;
@@ -325,6 +336,25 @@ impl VmEnv {
                 }
                 _ => panic!("Invalid unary operator"),
             },
+            Expr::FieldList(fl) => {
+                let gc_key = GcKey::new();
+                self.constants
+                    .add_constant(Value::Table(gc_key.clone()), &mut self.bc);
+                let table_constant_index = self.constants.latest - 1;
+                println!("index is {table_constant_index}");
+                for (key, value) in fl.into_iter() {
+                    self.build_bytecode_from_expr(key);
+                    self.build_bytecode_from_expr(value);
+                    self.bc.push(ByteCode::LoadConstant(table_constant_index));
+                    self.bc.push(ByteCode::SetTableField);
+                }
+                self.gc.store(gc_key, GcValue::Table(Table::new()));
+            }
+            Expr::Accessor(t, a) => {
+                self.build_bytecode_from_expr(a);
+                self.build_bytecode_from_expr(t);
+                self.bc.push(ByteCode::GetTableField);
+            }
             _ => {
                 todo!()
             }
@@ -489,6 +519,30 @@ impl VmEnv {
                 }
                 Some(&ByteCode::PopEnv) => {
                     self.local_envs.pop_back();
+                }
+                Some(&ByteCode::GetTableField) => {
+                    let table = self.stack.pop_back().expect("Expected table to access");
+                    let accessor = self.stack.pop_back().expect("Expected accessor for table");
+                    if let Value::Table(gc_key) = table {
+                        if let Some(GcValue::Table(tbl)) = self.gc.get_value(&gc_key.clone()) {
+                            self.stack
+                                .push_back(tbl.get(&accessor).unwrap_or(&Value::Nil).clone());
+                        }
+                    }
+                }
+                Some(&ByteCode::SetTableField) => {
+                    let table = self.stack.pop_back().expect("Expected table to set");
+                    let value = self.stack.pop_back().expect("Expected value");
+                    let key = self.stack.pop_back().expect("Expected accessor");
+                    match table {
+                        Value::Table(gc_key) => match self.gc.modify_value(&gc_key) {
+                            Some(table) => match table {
+                                GcValue::Table(table) => table.insert(key, value),
+                            },
+                            None => panic!("Missing table in GC store"),
+                        },
+                        _ => panic!("Cannot set value of non-table"),
+                    };
                 }
                 Some(&ByteCode::Placeholder) => {
                     panic!("Internal error during bytecode generation")
