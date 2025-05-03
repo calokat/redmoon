@@ -292,18 +292,19 @@ impl VmEnv {
             Expr::Binary(a, op, b) => {
                 self.build_bytecode_from_expr(&**a);
                 self.build_bytecode_from_expr(&**b);
-                if op == &Token::Plus {
-                    self.bc.push(ByteCode::Add);
-                } else if op == &Token::Minus {
-                    self.bc.push(ByteCode::Subtract);
-                } else if op == &Token::Star {
-                    self.bc.push(ByteCode::Multiply);
-                } else if op == &Token::ForwardSlash {
-                    self.bc.push(ByteCode::Divide);
-                } else if op == &Token::LessThan {
-                    self.bc.push(ByteCode::LessThan);
-                } else if op == &Token::Equals {
-                    self.bc.push(ByteCode::Equals);
+                match op {
+                    &Token::Plus => self.bc.push(ByteCode::Add),
+                    &Token::Minus => self.bc.push(ByteCode::Subtract),
+                    &Token::Star => self.bc.push(ByteCode::Multiply),
+                    &Token::ForwardSlash => self.bc.push(ByteCode::Divide),
+                    &Token::LessThan => self.bc.push(ByteCode::LessThan),
+                    &Token::LessThanOrEqual => self.bc.push(ByteCode::LessThanOrEqual),
+                    &Token::GreaterThanOrEqual => self.bc.push(ByteCode::GreaterThanOrEqual),
+                    &Token::GreaterThan => self.bc.push(ByteCode::GreaterThan),
+                    &Token::Equals => self.bc.push(ByteCode::Equals),
+                    &Token::And => self.bc.push(ByteCode::And),
+                    &Token::Or => self.bc.push(ByteCode::Or),
+                    _ => panic!("Unsupported binary operation"),
                 }
             }
             Expr::Grouping(e) => {
