@@ -5,6 +5,7 @@ use crate::{
     expr::Expr,
     function::Function,
     gc::{gc_key::GcKey, gc_store::GcStore, gc_values::GcValue},
+    native_function::NativeFunction,
     stmt::Stmt,
     table::{Table, UserTable},
     tokens::Token,
@@ -21,7 +22,6 @@ macro_rules! binary_op {
         let res = b $op a;
         match res {
             Ok(c) => {
-                println!("{}", c);
                 $self.stack.push_back(c);
             }
             Err(msg) => {
@@ -180,6 +180,16 @@ impl VmEnv {
     pub fn new(s: Stmt) -> VmEnv {
         let local_envs = VecDeque::new();
         let global_env = UserTable::new();
+        global_env.table.borrow_mut().insert(
+            Value::String("print".into()),
+            Value::NativeFunctionDef(NativeFunction::new(Box::new(|args| {
+                for a in args.iter() {
+                    print!("{a}");
+                }
+                println!();
+                None
+            }))),
+        );
         let mut vm: VmEnv = VmEnv {
             local_envs,
             stack: VecDeque::new(),
@@ -536,7 +546,6 @@ impl VmEnv {
                     let r = self.stack.pop_back().unwrap();
                     match &l {
                         Value::String(_) => {
-                            println!("{} gets assigned to {}", r, l);
                             self.global_env.table.borrow_mut().insert(l, r);
                         }
                         _ => panic!("Cannot assign to expression"),
@@ -548,7 +557,6 @@ impl VmEnv {
                     let r = self.stack.pop_back().unwrap();
                     match &l {
                         Value::String(_) => {
-                            println!("{} gets assigned to {} locally", r, l);
                             self.get_current_env_mut().table.borrow_mut().insert(l, r);
                         }
                         _ => panic!("Cannot assign to expression"),
@@ -618,6 +626,8 @@ impl VmEnv {
                         } else {
                             panic!("Uncallable value");
                         }
+                    } else if let Value::NativeFunctionDef(nfd) = function {
+                        nfd.call(&mut val_list);
                     } else {
                         panic!("Cannot call value");
                     }
