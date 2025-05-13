@@ -1,7 +1,9 @@
-use std::collections::VecDeque;
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use crate::{
+    bytecode::bc::ByteCode,
     expr::Expr,
+    function::Function,
     gc::{gc_key::GcKey, gc_store::GcStore, gc_values::GcValue},
     stmt::Stmt,
     table::{Table, UserTable},
@@ -9,16 +11,22 @@ use crate::{
     values::Value,
 };
 
+use crate::bytecode::bc::ByteCodeBuffer;
+
 macro_rules! binary_op {
     ($self:ident, $op:tt) => {
         assert!($self.stack.len() >= 2, "Insufficient number of arguments {}", $self.stack.len());
         let a = $self.stack.pop_back().unwrap();
         let b = $self.stack.pop_back().unwrap();
-        if let Ok(c) = b $op a {
-            println!("{}", c);
-            $self.stack.push_back(c);
-        } else {
-            println!("What do you think you are doing");
+        let res = b $op a;
+        match res {
+            Ok(c) => {
+                println!("{}", c);
+                $self.stack.push_back(c);
+            }
+            Err(msg) => {
+                println!("{}", msg);
+            }
         }
     };
 }
@@ -41,44 +49,20 @@ macro_rules! logical_op {
     };
 }
 
-enum ByteCode {
-    Add,
-    And,
-    LessThan,
-    GreaterThanOrEqual,
-    GreaterThan,
-    LessThanOrEqual,
-    Break,
-    Subtract,
-    Multiply,
-    Divide,
-    LoadConstant(u32),
-    Equals,
-    Branch,
-    JumpTo(usize),
-    JumpBy(usize),
-    JumpBack(usize),
-    Or,
-    Not,
-    SetGlobalEnv,
-    SetLocalEnv,
-    SetTableField,
-    GetTableField,
-    GetEnv,
-    PushEnv,
-    PopEnv,
-    Placeholder,
-}
+pub type EnvStack = VecDeque<UserTable>;
 
+#[derive(Clone)]
 pub struct VmEnv {
     bc: ByteCodeBuffer,
     constants: ConstantBuffer,
     stack: VecDeque<Value>,
     global_env: UserTable,
-    local_envs: VecDeque<UserTable>,
-    gc: GcStore,
+    local_envs: EnvStack,
+    params: Vec<Expr>,
+    gc: Rc<RefCell<GcStore>>,
 }
 
+#[derive(Clone)]
 struct ConstantBuffer {
     v: Vec<Value>,
     latest: u32,
@@ -100,8 +84,6 @@ impl ConstantBuffer {
         self.v.get(index)
     }
 }
-
-type ByteCodeBuffer = Vec<ByteCode>;
 
 impl VmEnv {
     fn get_current_env_mut(&mut self) -> &mut UserTable {
@@ -170,6 +152,10 @@ impl VmEnv {
                 }
             }
             Value::VarargsIdentifier => Value::Boolean(t2 == Value::VarargsIdentifier),
+            Value::Process(k1) => match t2 {
+                Value::Process(k2) => Value::Boolean(k1 == k2),
+                _ => Value::Boolean(false),
+            },
         }
     }
 
@@ -182,6 +168,15 @@ impl VmEnv {
         }
     }
 
+    fn fork_self(&self, fd: Function) -> Self {
+        let mut forked = self.clone();
+        forked.bc.clear();
+        forked.build_bytecode_from_stmt(fd.get_body().clone());
+        forked.local_envs.push_back(UserTable::new());
+        forked.params = fd.get_params().clone();
+        return forked;
+    }
+
     pub fn new(s: Stmt) -> VmEnv {
         let local_envs = VecDeque::new();
         let global_env = UserTable::new();
@@ -191,7 +186,8 @@ impl VmEnv {
             bc: Vec::new(),
             constants: ConstantBuffer::new(),
             global_env,
-            gc: GcStore::new(),
+            params: Vec::new(),
+            gc: Rc::new(RefCell::new(GcStore::new())),
         };
         vm.build_bytecode_from_stmt(s);
         return vm;
@@ -287,6 +283,10 @@ impl VmEnv {
                     _ => panic!("Cannot assign to expression"),
                 }
             }
+            Stmt::Return(e) => {
+                self.build_bytecode_from_expr(&e);
+                self.bc.push(ByteCode::Return);
+            }
             _ => todo!(),
         }
         return self.bc.len() - initial_bc_length;
@@ -322,7 +322,16 @@ impl VmEnv {
                 self.build_bytecode_from_expr(e);
             }
             Expr::Literal(l) => {
-                self.constants.add_constant(l.clone(), &mut self.bc);
+                if let Value::FunctionDef(fd) = l {
+                    let gc_key = GcKey::new();
+                    self.constants
+                        .add_constant(Value::Process(gc_key.clone()), &mut self.bc);
+                    let forked = self.fork_self(fd.clone());
+                    self.gc.borrow_mut().store(gc_key, GcValue::Process(forked));
+                    self.bc.push(ByteCode::Fork);
+                } else {
+                    self.constants.add_constant(l.clone(), &mut self.bc);
+                }
             }
             Expr::Var(name) => {
                 self.constants
@@ -341,19 +350,28 @@ impl VmEnv {
                 self.constants
                     .add_constant(Value::Table(gc_key.clone()), &mut self.bc);
                 let table_constant_index = self.constants.latest - 1;
-                println!("index is {table_constant_index}");
                 for (key, value) in fl.into_iter() {
                     self.build_bytecode_from_expr(key);
                     self.build_bytecode_from_expr(value);
                     self.bc.push(ByteCode::LoadConstant(table_constant_index));
                     self.bc.push(ByteCode::SetTableField);
                 }
-                self.gc.store(gc_key, GcValue::Table(Table::new()));
+                self.gc
+                    .borrow_mut()
+                    .store(gc_key, GcValue::Table(Table::new()));
             }
             Expr::Accessor(t, a) => {
                 self.build_bytecode_from_expr(a);
                 self.build_bytecode_from_expr(t);
                 self.bc.push(ByteCode::GetTableField);
+            }
+            Expr::FunctionCall(function, args) => {
+                self.constants.add_constant(Value::Interrupt, &mut self.bc);
+                for a in args.iter().rev() {
+                    self.build_bytecode_from_expr(a);
+                }
+                self.build_bytecode_from_expr(function);
+                self.bc.push(ByteCode::FunctionCall);
             }
             _ => {
                 todo!()
@@ -362,7 +380,7 @@ impl VmEnv {
         return self.bc.len() - initial_bc_length;
     }
 
-    pub fn exec(&mut self) {
+    pub fn exec(&mut self) -> Value {
         let mut icounter = 0usize;
         loop {
             match self.bc.get(icounter) {
@@ -435,6 +453,33 @@ impl VmEnv {
                         icounter += 1;
                     }
                 }
+                Some(&ByteCode::Fork) => {
+                    let process_key = self
+                        .stack
+                        .pop_back()
+                        .expect("Internal error: Cannot access function");
+                    if let Value::Process(process_key) = process_key {
+                        let process = self
+                            .gc
+                            .borrow_mut()
+                            .modify_value(&process_key)
+                            .expect("Internal error: GC store missing process")
+                            .clone();
+                        if let GcValue::Process(mut process) = process {
+                            for le in self.local_envs.iter().rev().cloned() {
+                                process.local_envs.push_front(le);
+                            }
+                            self.gc
+                                .borrow_mut()
+                                .store(process_key.clone(), GcValue::Process(process));
+                            self.stack.push_back(Value::Process(process_key));
+                        } else {
+                            panic!("Internal error: Misplaced GC value");
+                        }
+                    } else {
+                        panic!("Internal error: Misplaced function");
+                    }
+                }
                 Some(&ByteCode::Break) => {
                     while let Some(bc) = self.bc.get(icounter) {
                         if let &ByteCode::JumpBack(_) = bc {
@@ -448,6 +493,9 @@ impl VmEnv {
                 }
                 Some(&ByteCode::JumpTo(i)) => {
                     icounter = i;
+                }
+                Some(&ByteCode::Return) => {
+                    break;
                 }
                 Some(&ByteCode::And) => {
                     let l = &self.stack.pop_back().unwrap();
@@ -524,7 +572,9 @@ impl VmEnv {
                     let table = self.stack.pop_back().expect("Expected table to access");
                     let accessor = self.stack.pop_back().expect("Expected accessor for table");
                     if let Value::Table(gc_key) = table {
-                        if let Some(GcValue::Table(tbl)) = self.gc.get_value(&gc_key.clone()) {
+                        if let Some(GcValue::Table(tbl)) =
+                            self.gc.borrow().get_value(&gc_key.clone())
+                        {
                             self.stack
                                 .push_back(tbl.get(&accessor).unwrap_or(&Value::Nil).clone());
                         }
@@ -535,14 +585,42 @@ impl VmEnv {
                     let value = self.stack.pop_back().expect("Expected value");
                     let key = self.stack.pop_back().expect("Expected accessor");
                     match table {
-                        Value::Table(gc_key) => match self.gc.modify_value(&gc_key) {
+                        Value::Table(gc_key) => match self.gc.borrow_mut().modify_value(&gc_key) {
                             Some(table) => match table {
                                 GcValue::Table(table) => table.insert(key, value),
+                                _ => panic!("Cannot access a value other than a table"),
                             },
                             None => panic!("Missing table in GC store"),
                         },
                         _ => panic!("Cannot set value of non-table"),
                     };
+                }
+                Some(&ByteCode::FunctionCall) => {
+                    let function = self.stack.pop_back().expect("Expected callable value");
+                    let mut val_list: Vec<Value> = Vec::new();
+                    while let Some(v) = self.stack.pop_back() {
+                        if let Value::Interrupt = v {
+                            break;
+                        } else {
+                            val_list.push(v);
+                        }
+                    }
+                    if let Value::Process(key) = function {
+                        let process = {
+                            let mut gc_store = self.gc.borrow_mut().clone();
+                            gc_store
+                                .modify_value(&key)
+                                .expect("Internal error: Error when allocating function")
+                                .clone()
+                        };
+                        if let GcValue::Process(mut p) = process {
+                            self.stack.push_back(p.exec_with_args(val_list));
+                        } else {
+                            panic!("Uncallable value");
+                        }
+                    } else {
+                        panic!("Cannot call value");
+                    }
                 }
                 Some(&ByteCode::Placeholder) => {
                     panic!("Internal error during bytecode generation")
@@ -553,5 +631,38 @@ impl VmEnv {
             }
             icounter += 1;
         }
+        return self.stack.pop_back().unwrap_or(Value::Nil);
+    }
+
+    fn exec_with_args(&mut self, args: Vec<Value>) -> Value {
+        self.local_envs.push_back(UserTable::new());
+        let mut param_iter = self.params.iter();
+        let mut arg_iter = args.into_iter();
+        while let Some(p) = param_iter.next() {
+            match p {
+                &Expr::Var(ref name) => {
+                    self.local_envs
+                        .back_mut()
+                        .expect("Internal error: Function must have local environment")
+                        .table
+                        .borrow_mut()
+                        .insert(
+                            Value::String(name.clone()),
+                            arg_iter.next().unwrap_or(Value::Nil),
+                        );
+                }
+                &Expr::Varargs => {
+                    self.local_envs
+                        .back_mut()
+                        .expect("Internal error: Function must have local environment")
+                        .table
+                        .borrow_mut()
+                        .insert(Value::VarargsIdentifier, Value::ValList(arg_iter.collect()));
+                    break;
+                }
+                _ => panic!("Invalid parameter"),
+            }
+        }
+        return self.exec();
     }
 }

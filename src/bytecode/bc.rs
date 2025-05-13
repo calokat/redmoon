@@ -1,0 +1,35 @@
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+pub enum ByteCode {
+    Add,
+    And,
+    LessThan,
+    GreaterThanOrEqual,
+    GreaterThan,
+    LessThanOrEqual,
+    Break,
+    Subtract,
+    Multiply,
+    Divide,
+    LoadConstant(u32),
+    Equals,
+    Branch,
+    // Clones the current process to create a new function
+    Fork,
+    JumpTo(usize),
+    JumpBy(usize),
+    JumpBack(usize),
+    Return,
+    Or,
+    Not,
+    SetGlobalEnv,
+    SetLocalEnv,
+    SetTableField,
+    GetTableField,
+    GetEnv,
+    PushEnv,
+    PopEnv,
+    FunctionCall,
+    Placeholder,
+}
+
+pub type ByteCodeBuffer = Vec<ByteCode>;

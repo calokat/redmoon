@@ -419,6 +419,10 @@ impl Interpreter {
                 }
             }
             Value::VarargsIdentifier => Value::Boolean(t2 == Value::VarargsIdentifier),
+            Value::Process(k1) => match t2 {
+                Value::Process(k2) => Value::Boolean((k1 == k2)),
+                _ => Value::Boolean(false),
+            },
         }
     }
 

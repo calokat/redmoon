@@ -31,6 +31,7 @@ pub enum Value {
     String(String),
     Nil,
     FunctionDef(Function),
+    Process(GcKey),
     NativeFunctionDef(NativeFunction),
     Table(GcKey),
     // Used when interpreting break statements. Can only be created by the runtime, not the user
@@ -70,6 +71,7 @@ impl Display for Value {
                 std::fmt::Result::Ok(())
             }
             Value::VarargsIdentifier => write!(f, "<varargs>"),
+            Value::Process(_) => write!(f, "<function>"),
         }
     }
 }

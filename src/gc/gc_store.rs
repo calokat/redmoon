@@ -1,11 +1,10 @@
 use crate::gc::gc_key::GcKey;
 use crate::gc::gc_values::GcValue;
-use crate::interpreter::Interpreter;
 use crate::table::Table;
 use crate::values::Value;
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct GcStore {
     store: HashMap<GcKey, GcValue>,
 }
@@ -64,7 +63,8 @@ impl GcStore {
         }
         let len_before_collect = self.store.len();
         println!("We found {} garbage collectable objects through marking, a total of {} have been allocated", marked_gc_keys.len(), self.store.len());
-        self.store.retain(|key, value| marked_gc_keys.contains(key));
+        self.store
+            .retain(|key, _value| marked_gc_keys.contains(key));
         println!(
             "Removed {} element(s)",
             len_before_collect - self.store.len()

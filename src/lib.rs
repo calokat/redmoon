@@ -10,8 +10,8 @@ pub mod stmt;
 pub mod table;
 pub mod tokens;
 pub mod values;
+pub mod vm;
 
-use bytecode::vm::VmEnv;
 use expr::Expr;
 use interpreter::Interpreter;
 use lexer::Lexer;
@@ -45,7 +45,7 @@ pub fn exec_bytecode(script: String) {
     let mut parser = Parser::new(tokens);
     let chunk = parser.chunk();
     if let Ok(stmt) = chunk {
-        let mut vm = VmEnv::new(stmt);
+        let mut vm = crate::vm::VmEnv::new(stmt);
         vm.exec();
     }
 }
