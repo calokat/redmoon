@@ -325,6 +325,7 @@ impl VmEnv {
                     &Token::Equals => self.bc.push(ByteCode::Equals),
                     &Token::And => self.bc.push(ByteCode::And),
                     &Token::Or => self.bc.push(ByteCode::Or),
+                    &Token::Concatenation => self.bc.push(ByteCode::Concat),
                     _ => panic!("Unsupported binary operation"),
                 }
             }
@@ -390,6 +391,14 @@ impl VmEnv {
         return self.bc.len() - initial_bc_length;
     }
 
+    fn stringify(v: Value) -> Result<String, ()> {
+        match v {
+            Value::String(s) => Ok(s),
+            Value::Number(n) => Ok(n.to_string()),
+            _ => Err(()),
+        }
+    }
+
     pub fn exec(&mut self) -> Value {
         let mut icounter = 0usize;
         loop {
@@ -447,6 +456,27 @@ impl VmEnv {
                     let l = self.stack.pop_back().unwrap();
                     self.stack
                         .push_back(Value::Boolean(compare_nums!(l, r, <=)));
+                }
+                Some(&ByteCode::Concat) => {
+                    let r = self
+                        .stack
+                        .pop_back()
+                        .expect("Need right hand operand for concatenation");
+                    let l = self
+                        .stack
+                        .pop_back()
+                        .expect("Need left hand operand for concatenation");
+                    let ls = Self::stringify(l);
+                    let rs = Self::stringify(r);
+                    if let Ok(ls) = ls {
+                        if let Ok(rs) = rs {
+                            self.stack.push_back(Value::String(ls + &rs));
+                        } else {
+                            panic!("Cannot concatenate");
+                        }
+                    } else {
+                        panic!("Cannot concatenate");
+                    }
                 }
                 Some(&ByteCode::LoadConstant(u)) => {
                     let constant = self

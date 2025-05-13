@@ -10,6 +10,7 @@ pub enum ByteCode {
     Subtract,
     Multiply,
     Divide,
+    Concat,
     LoadConstant(u32),
     Equals,
     Branch,
