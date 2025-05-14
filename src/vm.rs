@@ -184,7 +184,7 @@ impl VmEnv {
             Value::String("print".into()),
             Value::NativeFunctionDef(NativeFunction::new(Box::new(|args| {
                 for a in args.iter() {
-                    print!("{a}");
+                    print!("{a}\t");
                 }
                 println!();
                 None
@@ -246,23 +246,29 @@ impl VmEnv {
             }
             Stmt::Empty => {}
             Stmt::Assignment(l, r) => {
-                self.build_bytecode_from_expr(&r);
-                match &l {
-                    Expr::Exprlist(vars) => {
-                        for var in vars.iter().rev() {
-                            match &var {
-                                &Expr::Var(var_name) => {
-                                    self.constants.add_constant(
-                                        Value::String(var_name.clone()),
-                                        &mut self.bc,
-                                    );
-                                    self.bc.push(ByteCode::SetGlobalEnv);
-                                }
-                                _ => panic!("Cannot assign to expression"),
+                if let Expr::Exprlist(values) = r {
+                    for val in values.into_iter().rev() {
+                        self.build_bytecode_from_expr(&val);
+                    }
+                } else {
+                    panic!("Cannot assign expression");
+                }
+                if let Expr::Exprlist(vars) = l {
+                    for var in vars.into_iter() {
+                        match var {
+                            Expr::Var(var_name) => {
+                                self.constants
+                                    .add_constant(Value::String(var_name), &mut self.bc);
+                                self.bc.push(ByteCode::SetGlobalEnv);
                             }
+                            Expr::Accessor(t, a) => {
+                                self.build_bytecode_from_expr(&*t);
+                                self.build_bytecode_from_expr(&*a);
+                                self.bc.push(ByteCode::SetTableField);
+                            }
+                            _ => panic!("Cannot assign to expression"),
                         }
                     }
-                    _ => panic!("Cannot assign to expression"),
                 }
             }
             Stmt::RepeatUntilLoop(body, cond) => {
@@ -362,9 +368,9 @@ impl VmEnv {
                     .add_constant(Value::Table(gc_key.clone()), &mut self.bc);
                 let table_constant_index = self.constants.latest - 1;
                 for (key, value) in fl.into_iter() {
-                    self.build_bytecode_from_expr(key);
                     self.build_bytecode_from_expr(value);
                     self.bc.push(ByteCode::LoadConstant(table_constant_index));
+                    self.build_bytecode_from_expr(key);
                     self.bc.push(ByteCode::SetTableField);
                 }
                 self.gc
@@ -372,8 +378,8 @@ impl VmEnv {
                     .store(gc_key, GcValue::Table(Table::new()));
             }
             Expr::Accessor(t, a) => {
-                self.build_bytecode_from_expr(a);
                 self.build_bytecode_from_expr(t);
+                self.build_bytecode_from_expr(a);
                 self.bc.push(ByteCode::GetTableField);
             }
             Expr::FunctionCall(function, args) => {
@@ -399,7 +405,7 @@ impl VmEnv {
         }
     }
 
-    pub fn exec(&mut self) -> Value {
+    pub fn exec(mut self) -> VecDeque<Value> {
         let mut icounter = 0usize;
         loop {
             match self.bc.get(icounter) {
@@ -571,9 +577,8 @@ impl VmEnv {
                     icounter += i;
                 }
                 Some(&ByteCode::SetGlobalEnv) => {
-                    assert!(self.stack.len() >= 2, "Insufficient number of arguments");
                     let l = self.stack.pop_back().unwrap();
-                    let r = self.stack.pop_back().unwrap();
+                    let r = self.stack.pop_back().unwrap_or(Value::Nil);
                     match &l {
                         Value::String(_) => {
                             self.global_env.table.borrow_mut().insert(l, r);
@@ -607,8 +612,8 @@ impl VmEnv {
                     self.local_envs.pop_back();
                 }
                 Some(&ByteCode::GetTableField) => {
-                    let table = self.stack.pop_back().expect("Expected table to access");
                     let accessor = self.stack.pop_back().expect("Expected accessor for table");
+                    let table = self.stack.pop_back().expect("Expected table to access");
                     if let Value::Table(gc_key) = table {
                         if let Some(GcValue::Table(tbl)) =
                             self.gc.borrow().get_value(&gc_key.clone())
@@ -619,9 +624,9 @@ impl VmEnv {
                     }
                 }
                 Some(&ByteCode::SetTableField) => {
+                    let key = self.stack.pop_back().expect("Expected value");
                     let table = self.stack.pop_back().expect("Expected table to set");
-                    let value = self.stack.pop_back().expect("Expected value");
-                    let key = self.stack.pop_back().expect("Expected accessor");
+                    let value = self.stack.pop_back().expect("Expected accessor");
                     match table {
                         Value::Table(gc_key) => match self.gc.borrow_mut().modify_value(&gc_key) {
                             Some(table) => match table {
@@ -651,8 +656,13 @@ impl VmEnv {
                                 .expect("Internal error: Error when allocating function")
                                 .clone()
                         };
-                        if let GcValue::Process(mut p) = process {
-                            self.stack.push_back(p.exec_with_args(val_list));
+                        if let GcValue::Process(p) = process {
+                            let returned_values = p.exec_with_args(val_list);
+                            if returned_values.len() == 0 {
+                                self.stack.push_back(Value::Nil);
+                            } else {
+                                self.stack.extend(returned_values.into_iter().rev());
+                            }
                         } else {
                             panic!("Uncallable value");
                         }
@@ -671,10 +681,10 @@ impl VmEnv {
             }
             icounter += 1;
         }
-        return self.stack.pop_back().unwrap_or(Value::Nil);
+        return self.stack;
     }
 
-    fn exec_with_args(&mut self, args: Vec<Value>) -> Value {
+    fn exec_with_args(mut self, args: Vec<Value>) -> VecDeque<Value> {
         self.local_envs.push_back(UserTable::new());
         let mut param_iter = self.params.iter();
         let mut arg_iter = args.into_iter();
