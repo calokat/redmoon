@@ -280,17 +280,24 @@ impl VmEnv {
                 self.bc.push(ByteCode::PopEnv);
             }
             Stmt::LocalAssignment(l, r) => {
-                self.build_bytecode_from_expr(&r);
-                match &l {
+                if let Expr::Exprlist(values) = r {
+                    for val in values.into_iter().rev() {
+                        self.build_bytecode_from_expr(&val);
+                    }
+                } else {
+                    panic!("Cannot assign expression");
+                }
+                match l {
                     Expr::Exprlist(vars) => {
-                        for var in vars.iter().rev() {
-                            match &var {
-                                &Expr::Var(var_name) => {
-                                    self.constants.add_constant(
-                                        Value::String(var_name.clone()),
-                                        &mut self.bc,
-                                    );
+                        for var in vars.into_iter() {
+                            match var {
+                                Expr::Var(var_name) => {
+                                    self.constants
+                                        .add_constant(Value::String(var_name), &mut self.bc);
                                     self.bc.push(ByteCode::SetLocalEnv);
+                                }
+                                Expr::Accessor(..) => {
+                                    panic!("Cannot set table field in a local assignment")
                                 }
                                 _ => panic!("Cannot assign to expression"),
                             }
@@ -587,9 +594,8 @@ impl VmEnv {
                     }
                 }
                 Some(&ByteCode::SetLocalEnv) => {
-                    assert!(self.stack.len() >= 2, "Insufficient number of arguments");
                     let l = self.stack.pop_back().unwrap();
-                    let r = self.stack.pop_back().unwrap();
+                    let r = self.stack.pop_back().unwrap_or(Value::Nil);
                     match &l {
                         Value::String(_) => {
                             self.get_current_env_mut().table.borrow_mut().insert(l, r);
