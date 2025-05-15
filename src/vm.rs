@@ -94,6 +94,7 @@ impl VmEnv {
         return self
             .local_envs
             .iter()
+            .rev()
             .find_map(|le| {
                 if let Some(v) = le.table.borrow().get(key) {
                     return Some(v).cloned();
@@ -103,6 +104,15 @@ impl VmEnv {
             })
             .or(self.global_env.table.borrow().get(key).cloned())
             .unwrap_or(Value::Nil);
+    }
+
+    fn find_env(&mut self, key: &Value) -> &mut UserTable {
+        return self
+            .local_envs
+            .iter_mut()
+            .rev()
+            .find(|le| le.table.borrow_mut().contains_key(key))
+            .unwrap_or(&mut self.global_env);
     }
 
     fn equals(t1: Value, t2: Value) -> Value {
@@ -206,10 +216,17 @@ impl VmEnv {
     fn build_bytecode_from_stmt(&mut self, stmt: Stmt) -> usize {
         let initial_bc_length = self.bc.len();
         match stmt {
-            Stmt::Chunk(cv) | Stmt::Block(cv) | Stmt::DoBlock(cv) => {
+            Stmt::Chunk(cv) | Stmt::Block(cv) => {
                 for c in cv {
                     self.build_bytecode_from_stmt(c);
                 }
+            }
+            Stmt::DoBlock(blk) => {
+                self.bc.push(ByteCode::PushEnv);
+                for c in blk {
+                    self.build_bytecode_from_stmt(c);
+                }
+                self.bc.push(ByteCode::PopEnv);
             }
             Stmt::ExprStmt(e) => {
                 self.build_bytecode_from_expr(&e);
@@ -588,7 +605,7 @@ impl VmEnv {
                     let r = self.stack.pop_back().unwrap_or(Value::Nil);
                     match &l {
                         Value::String(_) => {
-                            self.global_env.table.borrow_mut().insert(l, r);
+                            self.find_env(&l).table.borrow_mut().insert(l, r);
                         }
                         _ => panic!("Cannot assign to expression"),
                     }
