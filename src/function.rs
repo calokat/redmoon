@@ -1,9 +1,7 @@
 use std::{
     borrow::{Borrow, BorrowMut},
-    cell::RefCell,
     collections::VecDeque,
     hash::Hash,
-    rc::Rc,
 };
 
 use crate::{expr::Expr, stmt::Stmt, table::UserTable};

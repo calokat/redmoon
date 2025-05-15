@@ -1,5 +1,5 @@
 use crate::Value;
-use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, hash::Hash, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, hash::Hash, rc::Rc};
 
 pub type Table = HashMap<Value, Value>;
 

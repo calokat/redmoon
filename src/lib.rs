@@ -28,7 +28,7 @@ pub fn exec_bytecode(script: String) {
     let mut parser = Parser::new(tokens);
     let chunk = parser.chunk();
     if let Ok(stmt) = chunk {
-        let mut vm = crate::vm::VmEnv::new(stmt);
+        let vm = crate::vm::VmEnv::new(stmt);
         vm.exec();
     }
 }
