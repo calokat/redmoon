@@ -1,5 +1,4 @@
 use std::{
-    num::ParseFloatError,
     ops::{Add, Div, Mul, Sub},
     str::FromStr,
 };
@@ -16,7 +15,7 @@ macro_rules! number_op {
                 Number::Float(f) => Number::Float(OrderedFloat(i as f64 $op *f)),
             },
             Number::Float(f) => match $b {
-                Number::Int(i) => Number::Float(OrderedFloat(i as f64 $op *f)),
+                Number::Int(i) => Number::Float(OrderedFloat(*f $op i as f64)),
                 Number::Float(rf) => Number::Float(f $op rf),
             },
         }
@@ -54,23 +53,35 @@ impl Mul for Number {
 impl Div for Number {
     type Output = Number;
     fn div(self, rhs: Self) -> Self::Output {
-        number_op!(self, rhs, /)
+        match self {
+            Number::Int(i) => match rhs {
+                Number::Int(ri) => {
+                    if i % ri == 0 {
+                        Number::Int(i / ri)
+                    } else {
+                        Number::Float(OrderedFloat(i as f64 / ri as f64))
+                    }
+                }
+                Number::Float(f) => Number::Float(OrderedFloat(i as f64 / *f)),
+            },
+            Number::Float(f) => match rhs {
+                Number::Int(i) => Number::Float(OrderedFloat(*f / i as f64)),
+                Number::Float(rf) => Number::Float(f / rf),
+            },
+        }
     }
 }
 
 impl FromStr for Number {
-    type Err = ParseFloatError;
+    type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let result: Result<OrderedFloat<f64>, ParseFloatError> = s.parse();
+        let result = s.parse::<i64>();
         match result {
-            Ok(number) => {
-                if number == number.floor() {
-                    return Ok(Number::Int(*number as i64));
-                } else {
-                    return Ok(Number::Float(number));
-                }
-            }
-            Err(e) => return Err(e),
+            Ok(number) => Ok(Number::Int(number)),
+            Err(_) => match s.parse::<f64>() {
+                Ok(number) => Ok(Number::Float(number.into())),
+                Err(e) => Err(e.to_string()),
+            },
         }
     }
 }
@@ -78,7 +89,10 @@ impl FromStr for Number {
 impl Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Number::Float(n) => write!(f, "{n}"),
+            Number::Float(n) => {
+                let suffix = if n.floor() == **n { ".0" } else { "" };
+                write!(f, "{n}{suffix}")
+            }
             Number::Int(i) => write!(f, "{i}"),
         }
     }
