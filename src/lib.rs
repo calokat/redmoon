@@ -4,6 +4,7 @@ pub mod function;
 pub mod gc;
 pub mod lexer;
 pub mod native_function;
+pub mod number;
 pub mod parser;
 pub mod stmt;
 pub mod table;

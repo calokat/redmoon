@@ -1,7 +1,7 @@
 use crate::function::Function;
 use crate::gc::gc_key::GcKey;
 use crate::native_function::NativeFunction;
-use ordered_float::OrderedFloat;
+use crate::number::Number;
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Sub};
 
@@ -27,7 +27,7 @@ macro_rules! impl_op {
 pub enum Value {
     ValList(Vec<Value>),
     Boolean(bool),
-    Number(OrderedFloat<f32>),
+    Number(Number),
     String(String),
     Nil,
     FunctionDef(Function),

@@ -1,7 +1,5 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
-use ordered_float::{Float, Pow};
-
 use crate::{
     bytecode::bc::ByteCode,
     expr::Expr,

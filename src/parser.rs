@@ -1,7 +1,5 @@
 use std::collections::VecDeque;
 
-use ordered_float::OrderedFloat;
-
 use crate::{function::Function, values::Value, Expr, Stmt, Token};
 
 pub struct Parser {
@@ -239,8 +237,8 @@ impl Parser {
                 if self.is_field_seperator() || self.current_token() == Some(Token::RightCurlyBrace)
                 {
                     fields.push((
-                        Box::new(Expr::Literal(Value::Number(OrderedFloat(
-                            field_counter as f32,
+                        Box::new(Expr::Literal(Value::Number(crate::number::Number::Int(
+                            field_counter,
                         )))),
                         Box::new(expr),
                     ));
@@ -315,7 +313,7 @@ impl Parser {
         let step = if self.check_token_type(Token::Comma) {
             self.expression()?
         } else {
-            Expr::Literal(Value::Number(1.0f32.into()))
+            Expr::Literal(Value::Number(crate::number::Number::Int(1)))
         };
         assert!(
             self.check_token_type(Token::Do),
