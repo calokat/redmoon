@@ -31,6 +31,8 @@ pub fn exec_bytecode(script: String) {
     if let Ok(stmt) = chunk {
         let vm = crate::vm::VmEnv::new(stmt);
         vm.exec();
+    } else if let Err(e) = chunk {
+        println!("{}", e);
     }
 }
 

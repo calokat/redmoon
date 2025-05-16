@@ -225,7 +225,7 @@ impl Parser {
                     self.check_token_type(Token::Assign),
                     "field needs to be assigned to"
                 );
-                let value = self.expression()?;
+                let value: Expr = self.expression()?;
                 fields.push((Box::new(key), Box::new(value)));
                 assert!(
                     self.is_field_seperator()
@@ -242,14 +242,21 @@ impl Parser {
                         )))),
                         Box::new(expr),
                     ));
+                    field_counter += 1;
                 } else if self.check_token_type(Token::Assign) {
                     if let Expr::Var(s) = expr {
                         let value = self.expression()?;
                         fields.push((Box::new(Expr::Literal(Value::String(s))), Box::new(value)));
+                    } else {
+                        return Err("Literal keys cannot be assigned to".into());
                     }
+                    assert!(
+                        self.is_field_seperator()
+                            || self.current_token() == Some(Token::RightCurlyBrace),
+                        "Fields need to be properly separated"
+                    );
                 }
             }
-            field_counter += 1;
         }
         Ok(Expr::FieldList(fields))
     }
