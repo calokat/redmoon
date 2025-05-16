@@ -2,6 +2,7 @@ use crate::Value;
 #[derive(PartialEq, Clone)]
 pub enum Token {
     Assign,
+    Caret,
     Comma,
     Literal(Value),
     Plus,

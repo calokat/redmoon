@@ -284,6 +284,10 @@ impl<'a> Lexer<'a> {
                 }
                 return Token::GreaterThan;
             }
+            '^' => {
+                self.advance();
+                Token::Caret
+            }
             _ => panic!("Unknown symbol"),
         }
     }
@@ -297,6 +301,7 @@ impl<'a> Lexer<'a> {
             '<' => true,
             '>' => true,
             '=' => true,
+            '^' => true,
             _ => false,
         }
     }

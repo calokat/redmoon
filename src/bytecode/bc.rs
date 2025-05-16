@@ -3,6 +3,7 @@ pub enum ByteCode {
     Add,
     And,
     LessThan,
+    Exponentiate,
     GreaterThanOrEqual,
     GreaterThan,
     LessThanOrEqual,

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
-use ordered_float::Float;
+use ordered_float::{Float, Pow};
 
 use crate::{
     bytecode::bc::ByteCode,
@@ -351,6 +351,7 @@ impl VmEnv {
                     &Token::Star => self.bc.push(ByteCode::Multiply),
                     &Token::ForwardSlash => self.bc.push(ByteCode::Divide),
                     &Token::DoubleForwardSlash => self.bc.push(ByteCode::FloorDivide),
+                    &Token::Caret => self.bc.push(ByteCode::Exponentiate),
                     &Token::LessThan => self.bc.push(ByteCode::LessThan),
                     &Token::LessThanOrEqual => self.bc.push(ByteCode::LessThanOrEqual),
                     &Token::GreaterThanOrEqual => self.bc.push(ByteCode::GreaterThanOrEqual),
@@ -460,6 +461,19 @@ impl VmEnv {
                     let result = a / b;
                     if let Ok(Value::Number(n)) = result {
                         self.stack.push_back(Value::Number(n.floor()));
+                    }
+                }
+                Some(&ByteCode::Exponentiate) => {
+                    let b = self
+                        .stack
+                        .pop_back()
+                        .expect("Need right operand for floor division");
+                    let a = self
+                        .stack
+                        .pop_back()
+                        .expect("Need left operand for floor division");
+                    if let (Value::Number(n1), Value::Number(n2)) = (a, b) {
+                        self.stack.push_back(Value::Number(n1.pow(n2)));
                     }
                 }
                 Some(&ByteCode::LessThan) => {
