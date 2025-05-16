@@ -7,6 +7,7 @@ pub enum Token {
     Plus,
     Minus,
     Star,
+    DoubleForwardSlash,
     ForwardSlash,
     Equals,
     NotEquals,

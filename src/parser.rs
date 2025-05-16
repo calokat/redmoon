@@ -141,6 +141,7 @@ impl Parser {
         if let Ok(mut expr) = unary {
             while self.check_token_type(Token::Star)
                 || self.check_token_type(Token::ForwardSlash)
+                || self.check_token_type(Token::DoubleForwardSlash)
                 || self.check_token_type(Token::Percent)
             {
                 let operator = self.previous_token();

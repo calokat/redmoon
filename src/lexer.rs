@@ -250,7 +250,11 @@ impl<'a> Lexer<'a> {
             }
             '/' => {
                 self.advance();
-                Token::ForwardSlash
+                if self.current_char() == '/' {
+                    self.advance();
+                    return Token::DoubleForwardSlash;
+                }
+                return Token::ForwardSlash;
             }
             '*' => {
                 self.advance();
