@@ -23,10 +23,58 @@ macro_rules! number_op {
     };
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(Clone, Copy, Hash)]
 pub enum Number {
     Int(i64),
     Float(OrderedFloat<f64>),
+}
+
+impl PartialEq for Number {
+    fn eq(&self, other: &Self) -> bool {
+        let n1 = self.try_into_int().unwrap_or(*self);
+        let n2 = other.try_into_int().unwrap_or(*other);
+
+        match n1 {
+            Number::Int(i1) => match n2 {
+                Number::Int(i2) => i1 == i2,
+                // If n2 could become an int, it would have in try_to_int()
+                Number::Float(_) => false,
+            },
+            Number::Float(f1) => match n2 {
+                Number::Int(_) => false,
+                Number::Float(f2) => f1 == f2,
+            },
+        }
+    }
+}
+
+impl Eq for Number {}
+
+impl PartialOrd for Number {
+    fn ge(&self, other: &Self) -> bool {
+        let (f1, f2) = (self.into_float(), other.into_float());
+        return f1 >= f2;
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        let (f1, f2) = (self.into_float(), other.into_float());
+        return f1 > f2;
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        let (f1, f2) = (self.into_float(), other.into_float());
+        return f1 <= f2;
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        let (f1, f2) = (self.into_float(), other.into_float());
+        return f1 < f2;
+    }
+
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let (f1, f2) = (self.into_float(), other.into_float());
+        return f1.partial_cmp(&f2);
+    }
 }
 
 impl Add for Number {
@@ -79,7 +127,12 @@ impl FromStr for Number {
         match result {
             Ok(number) => Ok(Number::Int(number)),
             Err(_) => match s.parse::<f64>() {
-                Ok(number) => Ok(Number::Float(number.into())),
+                Ok(number) => {
+                    if number == number.floor() {
+                        return Ok(Number::Int(number as i64));
+                    }
+                    Ok(Number::Float(number.into()))
+                }
                 Err(e) => Err(e.to_string()),
             },
         }
@@ -116,6 +169,26 @@ impl Number {
                 Number::Float(rf) => Number::Float((f).pow(rf)),
                 Number::Int(i) => Number::Float(OrderedFloat((*f).pow(i as f64))),
             },
+        }
+    }
+
+    fn try_into_int(self) -> Option<Self> {
+        match self {
+            Number::Int(_) => Some(self),
+            Number::Float(n) => {
+                if n.floor() == *n {
+                    return Some(Number::Int(*n as i64));
+                } else {
+                    return None;
+                }
+            }
+        }
+    }
+
+    fn into_float(self) -> f64 {
+        match self {
+            Number::Int(i) => i as f64,
+            Number::Float(f) => *f,
         }
     }
 }

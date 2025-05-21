@@ -13,9 +13,9 @@ macro_rules! impl_op {
                 match self {
                     Value::Number(a) => match rhs {
                         Value::Number(b) => Ok(Value::Number(a $op b)),
-                        _ => Err("Only numbers can be added".into()),
+                        _ => Err("Only numbers can be used here".into()),
                     },
-                    _ => Err("Only numbers can be added".into()),
+                    _ => Err("Only numbers can be used here".into()),
                 }
             }
         }
